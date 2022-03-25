@@ -48,7 +48,7 @@ def main(args):
     import_jax_weights_(model, args.param_path, version=args.model_name)
     #script_preset_(model)
     model = model.to(args.model_device)
- 
+    print('model on device')
     template_featurizer = templates.TemplateHitFeaturizer(
         mmcif_dir=args.template_mmcif_dir,
         max_template_date=args.max_template_date,
@@ -84,12 +84,14 @@ def main(args):
     tags = [l[1:] for l in tags]
 
     for tag, seq in zip(tags, seqs):
+        print(tag)
         fasta_path = os.path.join(args.output_dir, "tmp.fasta")
         with open(fasta_path, "w") as fp:
             fp.write(f">{tag}\n{seq}")
 
         logging.info("Generating features...") 
         local_alignment_dir = os.path.join(alignment_dir, tag)
+        """
         if(args.use_precomputed_alignments is None):
             if not os.path.exists(local_alignment_dir):
                 os.makedirs(local_alignment_dir)
@@ -109,7 +111,7 @@ def main(args):
             alignment_runner.run(
                 fasta_path, local_alignment_dir
             )
-    
+        """    
         feature_dict = data_processor.process_fasta(
             fasta_path=fasta_path, alignment_dir=local_alignment_dir
         )
@@ -132,7 +134,12 @@ def main(args):
             t = time.perf_counter()
             out = model(batch)
             logging.info(f"Inference time: {time.perf_counter() - t}")
-       
+            #print(out.keys())
+            #print(out['single'].shape)
+            outfile = tag + '.npy'
+            outpath = os.path.join(args.output_dir, outfile)
+            np.save(outpath, out['single'].cpu().detach().numpy())
+"""       
         # Toss out the recycling dimensions --- we don't need them anymore
         batch = tensor_tree_map(lambda x: np.array(x[..., -1].cpu()), batch)
         out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
@@ -178,7 +185,7 @@ def main(args):
         )
         with open(relaxed_output_path, 'w') as f:
             f.write(relaxed_pdb_str)
-
+"""
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
