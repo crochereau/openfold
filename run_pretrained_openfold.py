@@ -14,12 +14,11 @@
 # limitations under the License.
 
 import argparse
-from datetime import date
+import glob
 import logging
 import numpy as np
 import os
 
-import pickle
 import random
 import sys
 import time
@@ -28,14 +27,8 @@ import torch
 from openfold.config import model_config
 from openfold.data import templates, feature_pipeline, data_pipeline
 from openfold.model.model import AlphaFold
-from openfold.model.torchscript import script_preset_
-from openfold.np import residue_constants, protein
-import openfold.np.relax.relax as relax
 from openfold.utils.import_weights import (
     import_jax_weights_,
-)
-from openfold.utils.tensor_utils import (
-    tensor_tree_map,
 )
 
 from scripts.utils import add_data_args
@@ -46,7 +39,7 @@ def main(args):
     model = AlphaFold(config)
     model = model.eval()
     import_jax_weights_(model, args.param_path, version=args.model_name)
-    #script_preset_(model)
+
     model = model.to(args.model_device)
     print('model on device')
     template_featurizer = templates.TemplateHitFeaturizer(
@@ -77,115 +70,74 @@ def main(args):
         alignment_dir = args.use_precomputed_alignments
 
     # Gather input sequences
-    with open(args.fasta_path, "r") as fp:
-        lines = [l.strip() for l in fp.readlines()]
+    for file in glob.glob(args.fasta_path + '*.fasta'):
+            with open(file, "r") as fp:
+                lines = [l.strip() for l in fp.readlines()]
+            tags, seqs = lines[::2], lines[1::2]
+            tags = [l[1:] for l in tags]
+        
+            for tag, seq in zip(tags, seqs):
+                print(tag)
+                outfile = tag + '.npy'
+                outpath = os.path.join(args.output_dir, outfile)
 
-    tags, seqs = lines[::2], lines[1::2]
-    tags = [l[1:] for l in tags]
-
-    for tag, seq in zip(tags, seqs):
-        print(tag)
-        fasta_path = os.path.join(args.output_dir, "tmp.fasta")
-        with open(fasta_path, "w") as fp:
-            fp.write(f">{tag}\n{seq}")
-
-        logging.info("Generating features...") 
-        local_alignment_dir = os.path.join(alignment_dir, tag)
-        """
-        if(args.use_precomputed_alignments is None):
-            if not os.path.exists(local_alignment_dir):
-                os.makedirs(local_alignment_dir)
-            
-            alignment_runner = data_pipeline.AlignmentRunner(
-                jackhmmer_binary_path=args.jackhmmer_binary_path,
-                hhblits_binary_path=args.hhblits_binary_path,
-                hhsearch_binary_path=args.hhsearch_binary_path,
-                uniref90_database_path=args.uniref90_database_path,
-                mgnify_database_path=args.mgnify_database_path,
-                bfd_database_path=args.bfd_database_path,
-                uniclust30_database_path=args.uniclust30_database_path,
-                pdb70_database_path=args.pdb70_database_path,
-                use_small_bfd=use_small_bfd,
-                no_cpus=args.cpus,
-            )
-            alignment_runner.run(
-                fasta_path, local_alignment_dir
-            )
-        """    
-        feature_dict = data_processor.process_fasta(
-            fasta_path=fasta_path, alignment_dir=local_alignment_dir
-        )
-
-        # Remove temporary FASTA file
-        os.remove(fasta_path)
+                if not os.path.exists(outpath):
+                    try:
+                        fasta_path = os.path.join(args.output_dir, "tmp.fasta")
+                        with open(fasta_path, "w") as fp:
+                            fp.write(f">{tag}\n{seq}")
+                
+                        logging.info("Generating features...")
+                        local_alignment_dir = os.path.join(alignment_dir, tag)
     
-        processed_feature_dict = feature_processor.process_features(
-            feature_dict, mode='predict',
-        )
+                        if(args.use_precomputed_alignments is None):
+                            if not os.path.exists(local_alignment_dir):
+                                os.makedirs(local_alignment_dir)
+                            
+                            alignment_runner = data_pipeline.AlignmentRunner(
+                                jackhmmer_binary_path=args.jackhmmer_binary_path,
+                                hhblits_binary_path=args.hhblits_binary_path,
+                                hhsearch_binary_path=args.hhsearch_binary_path,
+                                uniref90_database_path=args.uniref90_database_path,
+                                mgnify_database_path=args.mgnify_database_path,
+                                bfd_database_path=args.bfd_database_path,
+                                uniclust30_database_path=args.uniclust30_database_path,
+                                pdb70_database_path=args.pdb70_database_path,
+                                use_small_bfd=use_small_bfd,
+                                no_cpus=args.cpus,
+                            )
+                            alignment_runner.run(
+                                fasta_path, local_alignment_dir
+                            )
     
-        logging.info("Executing model...")
-        batch = processed_feature_dict
-        with torch.no_grad():
-            batch = {
-                k:torch.as_tensor(v, device=args.model_device) 
-                for k,v in batch.items()
-            }
-        
-            t = time.perf_counter()
-            out = model(batch)
-            logging.info(f"Inference time: {time.perf_counter() - t}")
-            #print(out.keys())
-            #print(out['single'].shape)
-            outfile = tag + '.npy'
-            outpath = os.path.join(args.output_dir, outfile)
-            np.save(outpath, out['single'].cpu().detach().numpy())
-"""       
-        # Toss out the recycling dimensions --- we don't need them anymore
-        batch = tensor_tree_map(lambda x: np.array(x[..., -1].cpu()), batch)
-        out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
-        
-        plddt = out["plddt"]
-        mean_plddt = np.mean(plddt)
-        
-        plddt_b_factors = np.repeat(
-            plddt[..., None], residue_constants.atom_type_num, axis=-1
-        )
-    
-        unrelaxed_protein = protein.from_prediction(
-            features=batch,
-            result=out,
-            b_factors=plddt_b_factors
-        )
+                        feature_dict = data_processor.process_fasta(
+                            fasta_path=fasta_path, alignment_dir=local_alignment_dir
+                        )
+                
+                        # Remove temporary FASTA file
+                        os.remove(fasta_path)
+                    
+                        processed_feature_dict = feature_processor.process_features(
+                            feature_dict, mode='predict',
+                        )
+                    
+                        logging.info("Executing model...")
+                        batch = processed_feature_dict
+                        with torch.no_grad():
+                            batch = {
+                                k:torch.as_tensor(v, device=args.model_device)
+                                for k,v in batch.items()
+                            }
+                        
+                            t = time.perf_counter()
+                            out = model(batch)
+                            logging.info(f"Inference time: {time.perf_counter() - t}")
+                            np.save(outpath, out['single'].cpu().detach().numpy())
 
-        # Save the unrelaxed PDB.
-        unrelaxed_output_path = os.path.join(
-            args.output_dir, f'{tag}_{args.model_name}_unrelaxed.pdb'
-        )
-        with open(unrelaxed_output_path, 'w') as f:
-            f.write(protein.to_pdb(unrelaxed_protein))
+                    except RuntimeError:
+                        print(tag, 'CUDA OOM')
+                        continue
 
-        amber_relaxer = relax.AmberRelaxation(
-            use_gpu=(args.model_device != "cpu"),
-            **config.relax,
-        )
-        
-        # Relax the prediction.
-        t = time.perf_counter()
-        visible_devices = os.getenv("CUDA_VISIBLE_DEVICES")
-        if("cuda" in args.model_device):
-            device_no = args.model_device.split(":")[-1]
-            os.environ["CUDA_VISIBLE_DEVICES"] = device_no
-        relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
-        os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
-        logging.info(f"Relaxation time: {time.perf_counter() - t}")
-        
-        # Save the relaxed PDB.
-        relaxed_output_path = os.path.join(
-            args.output_dir, f'{tag}_{args.model_name}_relaxed.pdb'
-        )
-        with open(relaxed_output_path, 'w') as f:
-            f.write(relaxed_pdb_str)
-"""
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
