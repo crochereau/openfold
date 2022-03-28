@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import re
+import subprocess
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
@@ -831,7 +832,11 @@ def _process_single_hit(
         query_sequence,
         template_sequence,
     )
-    # Fail if we can't find the mmCIF file.
+
+    if not os.path.isfile(cif_path):
+        url = "https://files.rcsb.org/download/" + hit_pdb_code + ".cif"
+        subprocess.run(['wget', '-o', cif_path, url])
+
     with open(cif_path, "r") as cif_file:
         cif_string = cif_file.read()
 
