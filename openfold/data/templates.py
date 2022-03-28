@@ -835,7 +835,7 @@ def _process_single_hit(
 
     if not os.path.isfile(cif_path):
         url = "https://files.rcsb.org/download/" + hit_pdb_code + ".cif"
-        subprocess.run(['wget', '-o', cif_path, url])
+        subprocess.run(['sudo', 'wget', '-o', cif_path, url])
 
     with open(cif_path, "r") as cif_file:
         cif_string = cif_file.read()
