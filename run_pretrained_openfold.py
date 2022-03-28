@@ -37,44 +37,6 @@ from scripts.utils import add_data_args
 def main(args):
 
     for file in glob.glob(args.fasta_path + '*.fasta'):
-
-        # empty GPU memory and load model
-        torch.cuda.empty_cache()
-        config = model_config(args.model_name)
-        model = AlphaFold(config)
-        model = model.eval()
-        import_jax_weights_(model, args.param_path, version=args.model_name)
-    
-        model = model.to(args.model_device)
-        print('model on device')
-        template_featurizer = templates.TemplateHitFeaturizer(
-            mmcif_dir=args.template_mmcif_dir,
-            max_template_date=args.max_template_date,
-            max_hits=config.data.predict.max_templates,
-            kalign_binary_path=args.kalign_binary_path,
-            release_dates_path=args.release_dates_path,
-            obsolete_pdbs_path=args.obsolete_pdbs_path
-        )
-    
-        use_small_bfd=(args.bfd_database_path is None)
-    
-        data_processor = data_pipeline.DataPipeline(
-            template_featurizer=template_featurizer,
-        )
-    
-        output_dir_base = args.output_dir
-        random_seed = args.data_random_seed
-        if random_seed is None:
-            random_seed = random.randrange(sys.maxsize)
-        feature_processor = feature_pipeline.FeaturePipeline(config.data)
-    
-        if not os.path.exists(output_dir_base):
-            os.makedirs(output_dir_base)
-        if(args.use_precomputed_alignments is None):
-            alignment_dir = os.path.join(output_dir_base, "alignments")
-        else:
-            alignment_dir = args.use_precomputed_alignments
-
         # Gather input sequences
         with open(file, "r") as fp:
             lines = [l.strip() for l in fp.readlines()]
@@ -85,9 +47,48 @@ def main(args):
             print(tag)
             outfile = tag + '.npy'
             outpath = os.path.join(args.output_dir, outfile)
-
+        
             if not os.path.exists(outpath):
                 try:
+                    # empty GPU memory and load model
+                    torch.cuda.empty_cache()
+                    config = model_config(args.model_name)
+                    model = AlphaFold(config)
+                    model = model.eval()
+                    import_jax_weights_(model, args.param_path, version=args.model_name)
+                
+                    model = model.to(args.model_device)
+                    print('model on device')
+                    template_featurizer = templates.TemplateHitFeaturizer(
+                        mmcif_dir=args.template_mmcif_dir,
+                        max_template_date=args.max_template_date,
+                        max_hits=config.data.predict.max_templates,
+                        kalign_binary_path=args.kalign_binary_path,
+                        release_dates_path=args.release_dates_path,
+                        obsolete_pdbs_path=args.obsolete_pdbs_path
+                    )
+                
+                    use_small_bfd=(args.bfd_database_path is None)
+                
+                    data_processor = data_pipeline.DataPipeline(
+                        template_featurizer=template_featurizer,
+                    )
+                
+                    output_dir_base = args.output_dir
+                    random_seed = args.data_random_seed
+                    if random_seed is None:
+                        random_seed = random.randrange(sys.maxsize)
+                    feature_processor = feature_pipeline.FeaturePipeline(config.data)
+                
+                    if not os.path.exists(output_dir_base):
+                        os.makedirs(output_dir_base)
+                    if(args.use_precomputed_alignments is None):
+                        alignment_dir = os.path.join(output_dir_base, "alignments")
+                    else:
+                        alignment_dir = args.use_precomputed_alignments
+
+        
+                
                     fasta_path = os.path.join(args.output_dir, "tmp.fasta")
                     with open(fasta_path, "w") as fp:
                         fp.write(f">{tag}\n{seq}")
@@ -141,6 +142,7 @@ def main(args):
 
                 except RuntimeError:
                     print(tag, 'CUDA OOM')
+                    torch.cuda.empty_cache()
                     continue
 
 
