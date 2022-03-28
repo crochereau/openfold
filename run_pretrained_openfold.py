@@ -71,6 +71,7 @@ def main(args):
 
     # Gather input sequences
     for file in glob.glob(args.fasta_path + '*.fasta'):
+            torch.cuda.empty_cache()
             with open(file, "r") as fp:
                 lines = [l.strip() for l in fp.readlines()]
             tags, seqs = lines[::2], lines[1::2]
