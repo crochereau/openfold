@@ -51,7 +51,7 @@ def main(args):
             if not os.path.exists(outpath):
                 try:
                     # empty GPU memory and load model
-                    torch.cuda.empty_cache()
+                    #torch.cuda.empty_cache()
                     config = model_config(args.model_name)
                     model = AlphaFold(config)
                     model = model.eval()
@@ -142,7 +142,7 @@ def main(args):
 
                 except RuntimeError:
                     print(tag, 'CUDA OOM')
-                    torch.cuda.empty_cache()
+                    #torch.cuda.empty_cache()
                     continue
 
 
