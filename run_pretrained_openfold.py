@@ -89,7 +89,7 @@ def main(args):
 
         
                 
-                    fasta_path = os.path.join(args.output_dir, "tmp.fasta")
+                    fasta_path = os.path.join(args.output_dir, f"{tag}_tmp.fasta")
                     with open(fasta_path, "w") as fp:
                         fp.write(f">{tag}\n{seq}")
             
