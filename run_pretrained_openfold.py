@@ -38,7 +38,7 @@ from scripts.utils import add_data_args
 
 def main(args):
 
-    for file in tqdm(glob.glob(args.fasta_path + '*.fasta')):
+    for file in tqdm.tqdm(glob.glob(args.fasta_path + '*.fasta')):
         # Gather input sequences
         with open(file, "r") as fp:
             lines = [l.strip() for l in fp.readlines()]
