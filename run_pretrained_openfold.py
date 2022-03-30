@@ -82,8 +82,8 @@ def main(args):
                     feature_processor = feature_pipeline.FeaturePipeline(config.data)
                     
                     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-                    Path(args.outdir_single).mkdir(parents=True, exist_ok=True)
-                    Path(args.outdir_pair).mkdir(parents=True, exist_ok=True)
+                    Path(outdir_single).mkdir(parents=True, exist_ok=True)
+                    Path(outdir_pair).mkdir(parents=True, exist_ok=True)
                         
                     if(args.use_precomputed_alignments is None):
                         alignment_dir = os.path.join(args.output_dir, "alignments")
