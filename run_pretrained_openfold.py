@@ -18,6 +18,7 @@ import glob
 import logging
 import numpy as np
 import os
+from pathlib import Path
 
 import random
 import sys
@@ -46,12 +47,13 @@ def main(args):
         for tag, seq in zip(tags, seqs):
             print(tag)
             outfile = tag + '.npy'
-            outpath = os.path.join(args.output_dir, outfile)
+            outdir_single = os.path.join(args.output_dir, 'single')
+            outdir_pair = os.path.join(args.output_dir, 'pair')
+            outpath_single = os.path.join(outdir_single, outfile)
+            outpath_pair = os.path.join(outdir_pair, outfile)
         
-            if not os.path.exists(outpath):
+            if not os.path.isfile(outpath_single) or not os.path.isfile(outpath_pair):
                 try:
-                    # empty GPU memory and load model
-                    #torch.cuda.empty_cache()
                     config = model_config(args.model_name)
                     model = AlphaFold(config)
                     model = model.eval()
@@ -68,26 +70,25 @@ def main(args):
                         obsolete_pdbs_path=args.obsolete_pdbs_path
                     )
                 
-                    use_small_bfd=(args.bfd_database_path is None)
+                    use_small_bfd = (args.bfd_database_path is None)
                 
                     data_processor = data_pipeline.DataPipeline(
                         template_featurizer=template_featurizer,
                     )
                 
-                    output_dir_base = args.output_dir
                     random_seed = args.data_random_seed
                     if random_seed is None:
                         random_seed = random.randrange(sys.maxsize)
                     feature_processor = feature_pipeline.FeaturePipeline(config.data)
-                
-                    if not os.path.exists(output_dir_base):
-                        os.makedirs(output_dir_base)
+                    
+                    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+                    Path(args.outdir_single).mkdir(parents=True, exist_ok=True)
+                    Path(args.outdir_pair).mkdir(parents=True, exist_ok=True)
+                        
                     if(args.use_precomputed_alignments is None):
-                        alignment_dir = os.path.join(output_dir_base, "alignments")
+                        alignment_dir = os.path.join(args.output_dir, "alignments")
                     else:
                         alignment_dir = args.use_precomputed_alignments
-
-        
                 
                     fasta_path = os.path.join(args.output_dir, f"{tag}_tmp.fasta")
                     with open(fasta_path, "w") as fp:
@@ -138,21 +139,23 @@ def main(args):
                         t = time.perf_counter()
                         out = model(batch)
                         logging.info(f"Inference time: {time.perf_counter() - t}")
-                        np.save(outpath, out['single'].cpu().detach().numpy())
+                        
+                        # Save embeddings
+                        np.save(outpath_single, out['single'].cpu().detach().numpy())
+                        np.save(outpath_pair, out['pair'].cpu().detach().numpy())
 
                 except RuntimeError:
                     print(tag, 'CUDA OOM')
-                    #torch.cuda.empty_cache()
                     continue
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "fasta_path", type=str,
+        "--fasta_path", type=str,
     )
     parser.add_argument(
-        "template_mmcif_dir", type=str,
+        "--template_mmcif_dir", type=str,
     )
     parser.add_argument(
         "--use_precomputed_alignments", type=str, default=None,
@@ -161,7 +164,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--output_dir", type=str, default=os.getcwd(),
-        help="""Name of the directory in which to output the prediction""",
+        help="""Name of the directory in which to output the prediction.""",
     )
     parser.add_argument(
         "--model_device", type=str, default="cpu",
