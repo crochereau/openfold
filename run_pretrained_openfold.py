@@ -24,6 +24,7 @@ import random
 import sys
 import time
 import torch
+import tqdm
 
 from openfold.config import model_config
 from openfold.data import templates, feature_pipeline, data_pipeline
@@ -37,7 +38,7 @@ from scripts.utils import add_data_args
 
 def main(args):
 
-    for file in glob.glob(args.fasta_path + '*.fasta'):
+    for file in tqdm(glob.glob(args.fasta_path + '*.fasta')):
         # Gather input sequences
         with open(file, "r") as fp:
             lines = [l.strip() for l in fp.readlines()]
