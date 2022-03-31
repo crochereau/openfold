@@ -53,7 +53,7 @@ def main(args):
             outpath_single = os.path.join(outdir_single, outfile)
             outpath_pair = os.path.join(outdir_pair, outfile)
         
-            if not os.path.isfile(outpath_single) or not os.path.isfile(outpath_pair):
+            if not os.path.isfile(outpath_single): # or not os.path.isfile(outpath_pair):
                 try:
                     config = model_config(args.model_name)
                     model = AlphaFold(config)
@@ -143,7 +143,7 @@ def main(args):
                         
                         # Save embeddings
                         np.save(outpath_single, out['single'].cpu().detach().numpy())
-                        np.save(outpath_pair, out['pair'].cpu().detach().numpy())
+                        #np.save(outpath_pair, out['pair'].cpu().detach().numpy())
 
                 except RuntimeError:
                     print(tag, 'CUDA OOM')
