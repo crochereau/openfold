@@ -16,7 +16,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--input_fasta", type=str, default='data/deepfri_ec/test/deepfri_final_ec_test.fasta',
@@ -27,8 +27,7 @@ if __name__ == "__main__":
         help="""Name of directory in which to output the individual sequence fasta files."""
     )
     args = parser.parse_args()
-    
+
     main(args)
-    
-    
+
 
