@@ -149,6 +149,10 @@ def main(args):
                     print(tag, 'CUDA OOM')
                     continue
 
+                except FileNotFoundError:
+                    print(tag, 'missing MSA')
+                    continue
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
