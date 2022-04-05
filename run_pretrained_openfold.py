@@ -54,97 +54,97 @@ def main(args):
             outpath_pair = os.path.join(outdir_pair, outfile)
         
             if not os.path.isfile(outpath_single): # or not os.path.isfile(outpath_pair):
-                #try:
-                config = model_config(args.model_name)
-                model = AlphaFold(config)
-                model = model.eval()
-                import_jax_weights_(model, args.param_path, version=args.model_name)
-            
-                model = model.to(args.model_device)
-                print('model on device')
-                template_featurizer = templates.TemplateHitFeaturizer(
-                    mmcif_dir=args.template_mmcif_dir,
-                    max_template_date=args.max_template_date,
-                    max_hits=config.data.predict.max_templates,
-                    kalign_binary_path=args.kalign_binary_path,
-                    release_dates_path=args.release_dates_path,
-                    obsolete_pdbs_path=args.obsolete_pdbs_path
-                )
-            
-                use_small_bfd = (args.bfd_database_path is None)
-            
-                data_processor = data_pipeline.DataPipeline(
-                    template_featurizer=template_featurizer,
-                )
-            
-                random_seed = args.data_random_seed
-                if random_seed is None:
-                    random_seed = random.randrange(sys.maxsize)
-                feature_processor = feature_pipeline.FeaturePipeline(config.data)
+                try:
+                    config = model_config(args.model_name)
+                    model = AlphaFold(config)
+                    model = model.eval()
+                    import_jax_weights_(model, args.param_path, version=args.model_name)
                 
-                Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-                Path(outdir_single).mkdir(parents=True, exist_ok=True)
-                Path(outdir_pair).mkdir(parents=True, exist_ok=True)
-                
-                if(args.use_precomputed_alignments is None):
-                    alignment_dir = os.path.join(args.output_dir, "alignments")
-                else:
-                    alignment_dir = args.use_precomputed_alignments
-            
-                fasta_path = os.path.join(args.output_dir, f"{tag}_tmp.fasta")
-                with open(fasta_path, "w") as fp:
-                    fp.write(f">{tag}\n{seq}")
-        
-                logging.info("Generating features...")
-                local_alignment_dir = os.path.join(alignment_dir, tag)
-
-                if(args.use_precomputed_alignments is None):
-                    if not os.path.exists(local_alignment_dir):
-                        os.makedirs(local_alignment_dir)
-                    
-                    alignment_runner = data_pipeline.AlignmentRunner(
-                        jackhmmer_binary_path=args.jackhmmer_binary_path,
-                        hhblits_binary_path=args.hhblits_binary_path,
-                        hhsearch_binary_path=args.hhsearch_binary_path,
-                        uniref90_database_path=args.uniref90_database_path,
-                        mgnify_database_path=args.mgnify_database_path,
-                        bfd_database_path=args.bfd_database_path,
-                        uniclust30_database_path=args.uniclust30_database_path,
-                        pdb70_database_path=args.pdb70_database_path,
-                        use_small_bfd=use_small_bfd,
-                        no_cpus=args.cpus,
+                    model = model.to(args.model_device)
+                    print('model on device')
+                    template_featurizer = templates.TemplateHitFeaturizer(
+                        mmcif_dir=args.template_mmcif_dir,
+                        max_template_date=args.max_template_date,
+                        max_hits=config.data.predict.max_templates,
+                        kalign_binary_path=args.kalign_binary_path,
+                        release_dates_path=args.release_dates_path,
+                        obsolete_pdbs_path=args.obsolete_pdbs_path
                     )
-                    alignment_runner.run(
-                        fasta_path, local_alignment_dir
-                    )
-
-                feature_dict = data_processor.process_fasta(
-                    fasta_path=fasta_path, alignment_dir=local_alignment_dir
-                )
-        
-                # Remove temporary FASTA file
-                os.remove(fasta_path)
-            
-                processed_feature_dict = feature_processor.process_features(
-                    feature_dict, mode='predict',
-                )
-            
-                logging.info("Executing model...")
-                batch = processed_feature_dict
-                with torch.no_grad():
-                    batch = {
-                        k:torch.as_tensor(v, device=args.model_device)
-                        for k,v in batch.items()
-                    }
                 
-                    t = time.perf_counter()
-                    out = model(batch)
-                    logging.info(f"Inference time: {time.perf_counter() - t}")
+                    use_small_bfd = (args.bfd_database_path is None)
+                
+                    data_processor = data_pipeline.DataPipeline(
+                        template_featurizer=template_featurizer,
+                    )
+                
+                    random_seed = args.data_random_seed
+                    if random_seed is None:
+                        random_seed = random.randrange(sys.maxsize)
+                    feature_processor = feature_pipeline.FeaturePipeline(config.data)
                     
-                    # Save embeddings
-                    np.save(outpath_single, out['single'].cpu().detach().numpy())
-                    #np.save(outpath_pair, out['pair'].cpu().detach().numpy())
-                '''
+                    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+                    Path(outdir_single).mkdir(parents=True, exist_ok=True)
+                    Path(outdir_pair).mkdir(parents=True, exist_ok=True)
+                    
+                    if(args.use_precomputed_alignments is None):
+                        alignment_dir = os.path.join(args.output_dir, "alignments")
+                    else:
+                        alignment_dir = args.use_precomputed_alignments
+                
+                    fasta_path = os.path.join(args.output_dir, f"{tag}_tmp.fasta")
+                    with open(fasta_path, "w") as fp:
+                        fp.write(f">{tag}\n{seq}")
+            
+                    logging.info("Generating features...")
+                    local_alignment_dir = os.path.join(alignment_dir, tag)
+    
+                    if(args.use_precomputed_alignments is None):
+                        if not os.path.exists(local_alignment_dir):
+                            os.makedirs(local_alignment_dir)
+                        
+                        alignment_runner = data_pipeline.AlignmentRunner(
+                            jackhmmer_binary_path=args.jackhmmer_binary_path,
+                            hhblits_binary_path=args.hhblits_binary_path,
+                            hhsearch_binary_path=args.hhsearch_binary_path,
+                            uniref90_database_path=args.uniref90_database_path,
+                            mgnify_database_path=args.mgnify_database_path,
+                            bfd_database_path=args.bfd_database_path,
+                            uniclust30_database_path=args.uniclust30_database_path,
+                            pdb70_database_path=args.pdb70_database_path,
+                            use_small_bfd=use_small_bfd,
+                            no_cpus=args.cpus,
+                        )
+                        alignment_runner.run(
+                            fasta_path, local_alignment_dir
+                        )
+    
+                    feature_dict = data_processor.process_fasta(
+                        fasta_path=fasta_path, alignment_dir=local_alignment_dir
+                    )
+            
+                    # Remove temporary FASTA file
+                    os.remove(fasta_path)
+                
+                    processed_feature_dict = feature_processor.process_features(
+                        feature_dict, mode='predict',
+                    )
+                
+                    logging.info("Executing model...")
+                    batch = processed_feature_dict
+                    with torch.no_grad():
+                        batch = {
+                            k:torch.as_tensor(v, device=args.model_device)
+                            for k,v in batch.items()
+                        }
+                    
+                        t = time.perf_counter()
+                        out = model(batch)
+                        logging.info(f"Inference time: {time.perf_counter() - t}")
+                        
+                        # Save embeddings
+                        np.save(outpath_single, out['single'].cpu().detach().numpy())
+                        #np.save(outpath_pair, out['pair'].cpu().detach().numpy())
+                
                 except RuntimeError:
                     print(tag, 'CUDA OOM')
                     continue
@@ -152,7 +152,7 @@ def main(args):
                 except FileNotFoundError:
                     print(tag, 'missing MSA')
                     continue
-                '''
+                
 
 
 if __name__ == "__main__":
