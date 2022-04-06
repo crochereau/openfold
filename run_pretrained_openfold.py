@@ -94,60 +94,69 @@ def main(args):
         outpath_single = os.path.join(outdir_single, outfile)
 
         if not os.path.isfile(outpath_single):
-            fasta_path = os.path.join(args.output_dir, f"{tag}_tmp.fasta")
-            with open(fasta_path, "w") as fp:
-                fp.write(f">{tag}\n{seq}")
-
-            logging.info("Generating features...")
-            local_alignment_dir = os.path.join(alignment_dir, tag)
-            if (args.use_precomputed_alignments is None):
-                if not os.path.exists(local_alignment_dir):
-                    os.makedirs(local_alignment_dir)
-
-                alignment_runner = data_pipeline.AlignmentRunner(
-                    jackhmmer_binary_path=args.jackhmmer_binary_path,
-                    hhblits_binary_path=args.hhblits_binary_path,
-                    hhsearch_binary_path=args.hhsearch_binary_path,
-                    uniref90_database_path=args.uniref90_database_path,
-                    mgnify_database_path=args.mgnify_database_path,
-                    bfd_database_path=args.bfd_database_path,
-                    uniclust30_database_path=args.uniclust30_database_path,
-                    pdb70_database_path=args.pdb70_database_path,
-                    use_small_bfd=use_small_bfd,
-                    no_cpus=args.cpus,
-                )
-                alignment_runner.run(
-                    fasta_path, local_alignment_dir
-                )
-
-            feature_dict = data_processor.process_fasta(
-                fasta_path=fasta_path, alignment_dir=local_alignment_dir
-            )
-
-            # Remove temporary FASTA file
-            os.remove(fasta_path)
-
-            processed_feature_dict = feature_processor.process_features(
-                feature_dict, mode='predict',
-            )
-
-            logging.info("Executing model...")
-            batch = processed_feature_dict
-            with torch.no_grad():
-                batch = {
-                    k: torch.as_tensor(v, device=args.model_device)
-                    for k, v in batch.items()
-                }
-
-                t = time.perf_counter()
-                out = model(batch)
-                logging.info(f"Inference time: {time.perf_counter() - t}")
+            try:
+                fasta_path = os.path.join(args.output_dir, f"{tag}_tmp.fasta")
+                with open(fasta_path, "w") as fp:
+                    fp.write(f">{tag}\n{seq}")
     
-            # Toss out the recycling dimensions --- we don't need them anymore
-            out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
+                logging.info("Generating features...")
+                local_alignment_dir = os.path.join(alignment_dir, tag)
+                if (args.use_precomputed_alignments is None):
+                    if not os.path.exists(local_alignment_dir):
+                        os.makedirs(local_alignment_dir)
+    
+                    alignment_runner = data_pipeline.AlignmentRunner(
+                        jackhmmer_binary_path=args.jackhmmer_binary_path,
+                        hhblits_binary_path=args.hhblits_binary_path,
+                        hhsearch_binary_path=args.hhsearch_binary_path,
+                        uniref90_database_path=args.uniref90_database_path,
+                        mgnify_database_path=args.mgnify_database_path,
+                        bfd_database_path=args.bfd_database_path,
+                        uniclust30_database_path=args.uniclust30_database_path,
+                        pdb70_database_path=args.pdb70_database_path,
+                        use_small_bfd=use_small_bfd,
+                        no_cpus=args.cpus,
+                    )
+                    alignment_runner.run(
+                        fasta_path, local_alignment_dir
+                    )
+    
+                feature_dict = data_processor.process_fasta(
+                    fasta_path=fasta_path, alignment_dir=local_alignment_dir
+                )
+    
+                # Remove temporary FASTA file
+                os.remove(fasta_path)
+    
+                processed_feature_dict = feature_processor.process_features(
+                    feature_dict, mode='predict',
+                )
+    
+                logging.info("Executing model...")
+                batch = processed_feature_dict
+                with torch.no_grad():
+                    batch = {
+                        k: torch.as_tensor(v, device=args.model_device)
+                        for k, v in batch.items()
+                    }
+    
+                    t = time.perf_counter()
+                    out = model(batch)
+                    logging.info(f"Inference time: {time.perf_counter() - t}")
+        
+                # Toss out the recycling dimensions --- we don't need them anymore
+                out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
+    
+                # Save embeddings
+                np.save(outpath_single, out['single'])
 
-            # Save embeddings
-            np.save(outpath_single, out['single'])
+            except RuntimeError:
+                print(tag, 'CUDA OOM')
+                continue
+
+            except FileNotFoundError:
+                print(tag, 'missing MSA')
+                continue
 
 
 if __name__ == "__main__":
