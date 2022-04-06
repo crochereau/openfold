@@ -97,13 +97,13 @@ def main(args):
             fasta_path = os.path.join(args.output_dir, f"{tag}_tmp.fasta")
             with open(fasta_path, "w") as fp:
                 fp.write(f">{tag}\n{seq}")
-            
+
             logging.info("Generating features...")
             local_alignment_dir = os.path.join(alignment_dir, tag)
             if (args.use_precomputed_alignments is None):
                 if not os.path.exists(local_alignment_dir):
                     os.makedirs(local_alignment_dir)
-                
+
                 alignment_runner = data_pipeline.AlignmentRunner(
                     jackhmmer_binary_path=args.jackhmmer_binary_path,
                     hhblits_binary_path=args.hhblits_binary_path,
@@ -119,18 +119,18 @@ def main(args):
                 alignment_runner.run(
                     fasta_path, local_alignment_dir
                 )
-            
+
             feature_dict = data_processor.process_fasta(
                 fasta_path=fasta_path, alignment_dir=local_alignment_dir
             )
-            
+
             # Remove temporary FASTA file
             os.remove(fasta_path)
-            
+
             processed_feature_dict = feature_processor.process_features(
                 feature_dict, mode='predict',
             )
-            
+
             logging.info("Executing model...")
             batch = processed_feature_dict
             with torch.no_grad():
@@ -138,18 +138,18 @@ def main(args):
                     k: torch.as_tensor(v, device=args.model_device)
                     for k, v in batch.items()
                 }
-                
+
                 t = time.perf_counter()
                 out = model(batch)
                 logging.info(f"Inference time: {time.perf_counter() - t}")
     
             # Toss out the recycling dimensions --- we don't need them anymore
             out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
-            
+
             # Save embeddings
             np.save(outpath_single, out['single'].cpu().detach().numpy())
-        
-    
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
