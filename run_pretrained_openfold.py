@@ -87,8 +87,8 @@ def main(args):
             ][1:]
     tags, seqs = lines[::2], lines[1::2]
     
-    for tag, seq in tqdm.tqdm(zip(tags, seqs)):
-        print(tag, seq)
+    for tag, seq in tqdm.tqdm(zip(tags, seqs), total=len(tags)):
+        print(tag)
         outfile = tag + '.npy'
         outdir_single = os.path.join(args.output_dir, 'single')
         outpath_single = os.path.join(outdir_single, outfile)
