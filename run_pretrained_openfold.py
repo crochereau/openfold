@@ -147,7 +147,7 @@ def main(args):
             out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
 
             # Save embeddings
-            np.save(outpath_single, out['single'].cpu().detach().numpy())
+            np.save(outpath_single, out['single'])
 
 
 if __name__ == "__main__":
