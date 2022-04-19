@@ -90,8 +90,7 @@ def main(args):
     for tag, seq in tqdm.tqdm(zip(tags, seqs), total=len(tags)):
         print(tag)
         outfile = tag + '.npy'
-        outdir_single = os.path.join(args.output_dir, 'single')
-        outpath_single = os.path.join(outdir_single, outfile)
+        outpath_single = os.path.join(args.output_dir, outfile)
 
         if not os.path.isfile(outpath_single):
             try:
@@ -154,9 +153,9 @@ def main(args):
                 print(tag, 'CUDA OOM')
                 continue
 
-            except FileNotFoundError:
-                print(tag, 'missing MSA')
-                continue
+            #except FileNotFoundError:
+                #print(tag, 'missing MSA')
+                #continue
 
 
 if __name__ == "__main__":
