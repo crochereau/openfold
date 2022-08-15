@@ -653,7 +653,9 @@ def compute_tm(
 
     normed_residue_mask = residue_weights / (eps + residue_weights.sum())
     per_alignment = torch.sum(predicted_tm_term * normed_residue_mask, dim=-1)
+
     weighted = per_alignment * residue_weights
+     
     argmax = (weighted == torch.max(weighted)).nonzero()[0]
     return per_alignment[tuple(argmax)]
 
@@ -1557,10 +1559,10 @@ class AlphaFoldLoss(nn.Module):
                 batch,
                 self.config.fape,
             ),
-            "lddt": lambda: lddt_loss(
+            "plddt_loss": lambda: lddt_loss(
                 logits=out["lddt_logits"],
                 all_atom_pred_pos=out["final_atom_positions"],
-                **{**batch, **self.config.lddt},
+                **{**batch, **self.config.plddt_loss},
             ),
             "masked_msa": lambda: masked_msa_loss(
                 logits=out["masked_msa_logits"],
