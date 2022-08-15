@@ -12,14 +12,22 @@ source inference code (v2.0.1). The sole exception is model ensembling, which
 fared poorly in DeepMind's own ablation testing and is being phased out in future
 DeepMind experiments. It is omitted here for the sake of reducing clutter. In 
 cases where the *Nature* paper differs from the source, we always defer to the 
-latter. 
+latter.
 
-OpenFold is built to support inference with AlphaFold's original JAX weights.
-Try it out with our [Colab notebook](https://colab.research.google.com/github/aqlaboratory/openfold/blob/main/notebooks/OpenFold.ipynb).
+OpenFold is built to support inference with AlphaFold's official parameters. Try it out for yourself with 
+our [Colab notebook](https://colab.research.google.com/github/aqlaboratory/openfold/blob/main/notebooks/OpenFold.ipynb).
 
-Unlike DeepMind's public code, OpenFold is also trainable. It can be trained 
-with [DeepSpeed](https://github.com/microsoft/deepspeed) and with either `fp16`
-or `bfloat16` half-precision.
+Additionally, OpenFold has the following advantages over the reference implementation:
+
+- Openfold is **trainable** in full precision or `bfloat16` half-precision, with or without [DeepSpeed](https://github.com/microsoft/deepspeed).
+- **Faster inference** on GPU.
+- **Inference on extremely long chains**, made possible by our implementation of low-memory attention 
+([Rabe & Staats 2021](https://arxiv.org/pdf/2112.05682.pdf)).
+- **Custom CUDA attention kernels** modified from [FastFold](https://github.com/hpcaitech/FastFold)'s 
+kernels support in-place attention during inference and training. They use 
+4x and 5x less GPU memory than equivalent FastFold and stock PyTorch 
+implementations, respectively.
+- **Efficient alignment scripts** using the original AlphaFold HHblits/JackHMMER pipeline or [ColabFold](https://github.com/sokrypton/ColabFold)'s, which uses the faster MMseqs2 instead. We've used them to generate millions of alignments that will be released alongside original OpenFold weights, trained from scratch using our code (more on that soon).
 
 ## Installation (Linux)
 
@@ -46,6 +54,12 @@ To deactivate it, run:
 
 ```bash
 source scripts/deactivate_conda_env.sh
+```
+
+With the environment active, compile OpenFold's CUDA kernels with
+
+```bash
+python3 setup.py install
 ```
 
 To install the HH-suite to `/usr/bin`, run
@@ -102,7 +116,7 @@ pretrained parameters, run e.g.:
 
 ```bash
 python3 run_pretrained_openfold.py \
-    target.fasta \
+    fasta_dir \
     data/pdb_mmcif/mmcif_files/ \
     --uniref90_database_path data/uniref90/uniref90.fasta \
     --mgnify_database_path data/mgnify/mgy_clusters_2018_12.fa \
@@ -127,14 +141,45 @@ Note that chunking (as defined in section 1.11.8 of the AlphaFold 2 supplement)
 is enabled by default in inference mode. To disable it, set `globals.chunk_size`
 to `None` in the config.
 
+Inference-time low-memory attention (LMA) can be enabled in the model config.
+This setting trades off speed for vastly improved memory usage. By default,
+LMA is run with query and key chunk sizes of 1024 and 4096, respectively.
+These represent a favorable tradeoff in most memory-constrained cases.
+Powerusers can choose to tweak these settings in 
+`openfold/model/primitives.py`. For more information on the LMA algorithm,
+see the aforementioned Staats & Rabe preprint.
+
+Input FASTA files containing multiple sequences are treated as complexes. In
+this case, the inference script runs AlphaFold-Gap, a hack proposed
+[here](https://twitter.com/minkbaek/status/1417538291709071362?lang=en), using
+the specified stock AlphaFold/OpenFold parameters (NOT AlphaFold-Multimer). To
+run inference with AlphaFold-Multimer, use the (experimental) `multimer` branch 
+instead.
+
+By default, OpenFold will attempt to automatically tune the inference-time 
+`chunk_size` hyperparameter controlling a memory/runtime tradeoff in certain 
+modules during inference. The chunk size specified in the config is only 
+considered a minimum. This feature ensures consistently fast runtimes 
+regardless of input sequence length, but it also introduces some runtime 
+variability, which may be undesirable for certain users. To disable this
+feature, set the `tune_chunk_size` option in the config to `False`.
+
+As noted in the AlphaFold-Multimer paper, the AlphaFold/OpenFold template
+stack is a major memory bottleneck for inference on long sequences. OpenFold
+supports two mutually exclusive inference modes to address this issue. One,
+`average_templates` in the `template` section of the config, is similar to the
+solution offered by AlphaFold-Multimer, which is simply to average individual
+template representations. Our version is modified slightly to accommodate 
+weights trained using the standard template algorithm. Using said weights, we
+notice no significant difference in performance between our averaged template 
+embeddings and the standard ones. The second, `offload_templates`, temporarily 
+offloads individual template embeddings into CPU memory. The former is an 
+approximation while the latter is slightly slower; both are memory-efficient 
+and allow the model to utilize arbitrarily many templates across sequence 
+lengths. Both are disabled by default, and it is up to the user to determine 
+which best suits their needs, if either.
+
 ### Training
-
-After activating the OpenFold environment with 
-`source scripts/activate_conda_env.sh`, install OpenFold by running
-
-```bash
-python setup.py install
-```
 
 To train the model, you will first need to precompute protein alignments. 
 
@@ -143,11 +188,10 @@ the following:
 
 ```bash
 python3 scripts/precompute_alignments.py mmcif_dir/ alignment_dir/ \
-    data/uniref90/uniref90.fasta \
-    data/mgnify/mgy_clusters_2018_12.fa \
-    data/pdb70/pdb70 \
-    data/pdb_mmcif/mmcif_files/ \
-    data/uniclust30/uniclust30_2018_08/uniclust30_2018_08 \
+    --uniref90_database_path data/uniref90/uniref90.fasta \
+    --mgnify_database_path data/mgnify/mgy_clusters_2018_12.fa \
+    --pdb70_database_path data/pdb70/pdb70 \
+    --uniclust30_database_path data/uniclust30/uniclust30_2018_08/uniclust30_2018_08 \
     --bfd_database_path data/bfd/bfd_metaclust_clu_complete_id30_c90_final_seq.sorted_opt \
     --cpus 16 \
     --jackhmmer_binary_path lib/conda/envs/openfold_venv/bin/jackhmmer \
@@ -219,16 +263,19 @@ python3 train_openfold.py mmcif_dir/ alignment_dir/ template_mmcif_dir/ \
 ```
 
 where `--template_release_dates_cache_path` is a path to the mmCIF cache. 
-A suitable DeepSpeed configuration file can be generated with 
+Note that `template_mmcif_dir` can be the same as `mmcif_dir` which contains
+training targets. A suitable DeepSpeed configuration file can be generated with 
 `scripts/build_deepspeed_config.py`. The training script is 
 written with [PyTorch Lightning](https://github.com/PyTorchLightning/pytorch-lightning) 
 and supports the full range of training options that entails, including 
-multi-node distributed training. For more information, consult PyTorch 
-Lightning documentation and the `--help` flag of the training script.
+multi-node distributed training, validation, and so on. For more information, 
+consult PyTorch Lightning documentation and the `--help` flag of the training 
+script.
 
-Note that the data directory can also contain PDB files previously output by
-the model. These are treated as members of the self-distillation set and are
-subjected to distillation-set-only preprocessing steps.
+Note that, despite its variable name, `mmcif_dir` can also contain PDB files 
+or even ProteinNet .core files. To emulate the AlphaFold training procedure, 
+which uses a self-distillation set subject to special preprocessing steps, use
+the family of `--distillation` flags.
 
 ## Testing
 
@@ -284,7 +331,7 @@ docker run \
 -v /mnt/alphafold_database/:/database \
 -ti openfold:latest \
 python3 /opt/openfold/run_pretrained_openfold.py \
-/data/input.fasta \
+/data/fasta_dir \
 /database/pdb_mmcif/mmcif_files/ \
 --uniref90_database_path /database/uniref90/uniref90.fasta \
 --mgnify_database_path /database/mgnify/mgy_clusters_2018_12.fa \
