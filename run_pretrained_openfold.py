@@ -450,7 +450,11 @@ def main(args):
                 processed_feature_dict
             )
             out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
+            single_output_path = os.path.join(args.output_dir, tag + '.npy')
+            np.save(single_output_path, out['single'])
+            logger.info(f"Single rep written to {single_output_path}...")
 
+            '''
             unrelaxed_protein = prep_output(
                 out,
                 processed_feature_dict,
@@ -505,6 +509,7 @@ def main(args):
                     pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
                 logger.info(f"Model output written to {output_dict_path}...")
+            '''
 
 def update_timings(dict, output_file=os.path.join(os.getcwd(), "timings.json")):
     """Write dictionary of one or more run step times to a file"""
