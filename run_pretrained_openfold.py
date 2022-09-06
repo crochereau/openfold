@@ -450,66 +450,69 @@ def main(args):
                 processed_feature_dict
             )
             out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
-            single_output_path = os.path.join(args.output_dir, tag + '.npy')
-            np.save(single_output_path, out['single'])
-            logger.info(f"Single rep written to {single_output_path}...")
 
-            '''
-            unrelaxed_protein = prep_output(
-                out,
-                processed_feature_dict,
-                feature_dict,
-                feature_processor,
-                args
-            )
+            if args.save_single_rep:
+                single_output_path = os.path.join(args.output_dir, tag + '.npy')
+                np.save(single_output_path, out['single'])
+                logger.info(f"Single rep written to {single_output_path}...")
 
-            unrelaxed_output_path = os.path.join(
-                output_directory, f'{output_name}_unrelaxed.pdb'
-            )
+            if args.save_structure:
 
-            with open(unrelaxed_output_path, 'w') as fp:
-                fp.write(protein.to_pdb(unrelaxed_protein))
-
-            logger.info(f"Output written to {unrelaxed_output_path}...")
-
-            if not args.skip_relaxation:
-                amber_relaxer = relax.AmberRelaxation(
-                    use_gpu=(args.model_device != "cpu"),
-                    **config.relax,
+                unrelaxed_protein = prep_output(
+                    out,
+                    processed_feature_dict,
+                    feature_dict,
+                    feature_processor,
+                    args
                 )
-
-                # Relax the prediction.
-                logger.info(f"Running relaxation on {unrelaxed_output_path}...")
-                t = time.perf_counter()
-                visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", default="")
-                if "cuda" in args.model_device:
-                    device_no = args.model_device.split(":")[-1]
-                    os.environ["CUDA_VISIBLE_DEVICES"] = device_no
-                relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
-                os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
-                relaxation_time = time.perf_counter() - t
-
-                logger.info(f"Relaxation time: {relaxation_time}")
-                update_timings({"relaxation": relaxation_time}, os.path.join(args.output_dir, "timings.json"))
-
-                # Save the relaxed PDB.
-                relaxed_output_path = os.path.join(
-                    output_directory, f'{output_name}_relaxed.pdb'
+    
+                unrelaxed_output_path = os.path.join(
+                    output_directory, f'{output_name}_unrelaxed.pdb'
                 )
-                with open(relaxed_output_path, 'w') as fp:
-                    fp.write(relaxed_pdb_str)
+    
+                with open(unrelaxed_output_path, 'w') as fp:
+                    fp.write(protein.to_pdb(unrelaxed_protein))
+    
+                logger.info(f"Output written to {unrelaxed_output_path}...")
+    
+                if not args.skip_relaxation:
+                    amber_relaxer = relax.AmberRelaxation(
+                        use_gpu=(args.model_device != "cpu"),
+                        **config.relax,
+                    )
+    
+                    # Relax the prediction.
+                    logger.info(f"Running relaxation on {unrelaxed_output_path}...")
+                    t = time.perf_counter()
+                    visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", default="")
+                    if "cuda" in args.model_device:
+                        device_no = args.model_device.split(":")[-1]
+                        os.environ["CUDA_VISIBLE_DEVICES"] = device_no
+                    relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
+                    os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
+                    relaxation_time = time.perf_counter() - t
+    
+                    logger.info(f"Relaxation time: {relaxation_time}")
+                    update_timings({"relaxation": relaxation_time}, os.path.join(args.output_dir, "timings.json"))
+    
+                    # Save the relaxed PDB.
+                    relaxed_output_path = os.path.join(
+                        output_directory, f'{output_name}_relaxed.pdb'
+                    )
+                    with open(relaxed_output_path, 'w') as fp:
+                        fp.write(relaxed_pdb_str)
+    
+                    logger.info(f"Relaxed output written to {relaxed_output_path}...")
+    
+                if args.save_outputs:
+                    output_dict_path = os.path.join(
+                        output_directory, f'{output_name}_output_dict.pkl'
+                    )
+                    with open(output_dict_path, "wb") as fp:
+                        pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
+    
+                    logger.info(f"Model output written to {output_dict_path}...")
 
-                logger.info(f"Relaxed output written to {relaxed_output_path}...")
-
-            if args.save_outputs:
-                output_dict_path = os.path.join(
-                    output_directory, f'{output_name}_output_dict.pkl'
-                )
-                with open(output_dict_path, "wb") as fp:
-                    pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
-
-                logger.info(f"Model output written to {output_dict_path}...")
-            '''
 
 def update_timings(dict, output_file=os.path.join(os.getcwd(), "timings.json")):
     """Write dictionary of one or more run step times to a file"""
@@ -527,6 +530,7 @@ def update_timings(dict, output_file=os.path.join(os.getcwd(), "timings.json")):
     with open(output_file, "w") as f:
         json.dump(timings, f)
     return output_file
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -569,6 +573,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save_outputs", action="store_true", default=False,
         help="Whether to save all model outputs, including embeddings, etc."
+    )
+    parser.add_argument(
+        "--save_single_rep", action="store_true", default=False,
+        help="Whether to save all the single representation."
+    )
+    parser.add_argument(
+        "--save_structure", action="store_true", default=False,
+        help="Whether to save the output structure."
     )
     parser.add_argument(
         "--cpus", type=int, default=4,
