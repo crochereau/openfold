@@ -400,14 +400,8 @@ def main(args):
 
             # Does nothing if the alignments have already been computed
             precompute_alignments(tags, seqs, alignment_dir, args)
-
-            if args.single_sequence:
-                a3m_file = os.path.join(alignment_dir, tag + '.a3m')
-            with open(a3m_file, 'w') as f:
-                f.write(f'>{tag}' + '\n')
-                f.write(f'>{seq}' + '\n')
-
             feature_dict = feature_dicts.get(tag, None)
+
             if(feature_dict is None):
                 feature_dict = generate_feature_dict(
                     tags,
@@ -579,10 +573,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save_outputs", action="store_true", default=False,
         help="Whether to save all model outputs, including embeddings, etc."
-    )
-    parser.add_argument(
-        "--single_sequence", action="store_true", default=False,
-        help="Whether uses single sequence (de novo) MSA mode."
     )
     parser.add_argument(
         "--save_single_rep", action="store_true", default=False,
