@@ -216,8 +216,8 @@ def main(args):
 
             # Does nothing if the alignments have already been computed
             precompute_alignments(tags, seqs, alignment_dir, args)
-
             feature_dict = feature_dicts.get(tag, None)
+
             if(feature_dict is None):
                 feature_dict = generate_feature_dict(
                     tags,
@@ -266,6 +266,7 @@ def main(args):
                 processed_feature_dict
             )
             out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
+<<<<<<< HEAD
 
             unrelaxed_protein = prep_output(
                 out, 
@@ -280,10 +281,15 @@ def main(args):
             unrelaxed_output_path = os.path.join(
                 output_directory, f'{output_name}_unrelaxed.pdb'
             )
+=======
+>>>>>>> eec4fc4f7542af371929ae5af05aff4fc22a4c49
 
-            with open(unrelaxed_output_path, 'w') as fp:
-                fp.write(protein.to_pdb(unrelaxed_protein))
+            if args.save_single_rep:
+                single_output_path = os.path.join(args.output_dir, tag + '.npy')
+                np.save(single_output_path, out['single'])
+                logger.info(f"Single rep written to {single_output_path}...")
 
+<<<<<<< HEAD
             logger.info(f"Output written to {unrelaxed_output_path}...")
             
             if not args.skip_relaxation:
@@ -294,11 +300,87 @@ def main(args):
             if args.save_outputs:
                 output_dict_path = os.path.join(
                     output_directory, f'{output_name}_output_dict.pkl'
-                )
-                with open(output_dict_path, "wb") as fp:
-                    pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
+=======
+            if args.save_structure:
 
+                unrelaxed_protein = prep_output(
+                    out,
+                    processed_feature_dict,
+                    feature_dict,
+                    feature_processor,
+                    args
+                )
+    
+                unrelaxed_output_path = os.path.join(
+                    output_directory, f'{output_name}_unrelaxed.pdb'
+>>>>>>> eec4fc4f7542af371929ae5af05aff4fc22a4c49
+                )
+    
+                with open(unrelaxed_output_path, 'w') as fp:
+                    fp.write(protein.to_pdb(unrelaxed_protein))
+    
+                logger.info(f"Output written to {unrelaxed_output_path}...")
+    
+                if not args.skip_relaxation:
+                    amber_relaxer = relax.AmberRelaxation(
+                        use_gpu=(args.model_device != "cpu"),
+                        **config.relax,
+                    )
+    
+                    # Relax the prediction.
+                    logger.info(f"Running relaxation on {unrelaxed_output_path}...")
+                    t = time.perf_counter()
+                    visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", default="")
+                    if "cuda" in args.model_device:
+                        device_no = args.model_device.split(":")[-1]
+                        os.environ["CUDA_VISIBLE_DEVICES"] = device_no
+                    relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
+                    os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
+                    relaxation_time = time.perf_counter() - t
+    
+                    logger.info(f"Relaxation time: {relaxation_time}")
+                    update_timings({"relaxation": relaxation_time}, os.path.join(args.output_dir, "timings.json"))
+    
+                    # Save the relaxed PDB.
+                    relaxed_output_path = os.path.join(
+                        output_directory, f'{output_name}_relaxed.pdb'
+                    )
+                    with open(relaxed_output_path, 'w') as fp:
+                        fp.write(relaxed_pdb_str)
+    
+                    logger.info(f"Relaxed output written to {relaxed_output_path}...")
+    
+                if args.save_outputs:
+                    output_dict_path = os.path.join(
+                        output_directory, f'{output_name}_output_dict.pkl'
+                    )
+                    with open(output_dict_path, "wb") as fp:
+                        pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
+    
+                    logger.info(f"Model output written to {output_dict_path}...")
+
+<<<<<<< HEAD
                 logger.info(f"Model output written to {output_dict_path}...")
+
+=======
+
+def update_timings(dict, output_file=os.path.join(os.getcwd(), "timings.json")):
+    """Write dictionary of one or more run step times to a file"""
+    import json
+    if os.path.exists(output_file):
+        with open(output_file, "r") as f:
+            try:
+                timings = json.load(f)
+            except json.JSONDecodeError:
+                logger.info(f"Overwriting non-standard JSON in {output_file}.")
+                timings = {}
+    else:
+        timings = {}
+    timings.update(dict)
+    with open(output_file, "w") as f:
+        json.dump(timings, f)
+    return output_file
+>>>>>>> eec4fc4f7542af371929ae5af05aff4fc22a4c49
 
 
 if __name__ == "__main__":
@@ -342,6 +424,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save_outputs", action="store_true", default=False,
         help="Whether to save all model outputs, including embeddings, etc."
+    )
+    parser.add_argument(
+        "--save_single_rep", action="store_true", default=False,
+        help="Whether to save all the single representation."
+    )
+    parser.add_argument(
+        "--save_structure", action="store_true", default=False,
+        help="Whether to save the output structure."
     )
     parser.add_argument(
         "--cpus", type=int, default=4,
