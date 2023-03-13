@@ -393,123 +393,131 @@ def main(args):
     feature_dicts = {}
     for model, output_directory in load_models_from_command_line(args, config):
         cur_tracing_interval = 0
-        for (tag, tags), seqs in sorted_targets:
-            output_name = f'{tag}_{args.config_preset}'
-            if args.output_postfix is not None:
-                output_name = f'{output_name}_{args.output_postfix}'
+        for (tag, tags), seqs in tqdm.tqdm(sorted_targets):
+            try:
 
-            # Does nothing if the alignments have already been computed
-            precompute_alignments(tags, seqs, alignment_dir, args)
+                single_output_path = os.path.join(args.output_dir, tag + '.npy')
+                if os.path.isfile(single_output_path):
+                    continue
 
-            feature_dict = feature_dicts.get(tag, None)
-            if(feature_dict is None):
-                feature_dict = generate_feature_dict(
-                    tags,
-                    seqs,
-                    alignment_dir,
-                    data_processor,
-                    args,
+                output_name = f'{tag}_{args.config_preset}'
+                if args.output_postfix is not None:
+                    output_name = f'{output_name}_{args.output_postfix}'
+
+                # Does nothing if the alignments have already been computed
+                precompute_alignments(tags, seqs, alignment_dir, args)
+
+                feature_dict = feature_dicts.get(tag, None)
+                if(feature_dict is None):
+                    feature_dict = generate_feature_dict(
+                        tags,
+                        seqs,
+                        alignment_dir,
+                        data_processor,
+                        args,
+                    )
+
+                    if(args.trace_model):
+                        n = feature_dict["aatype"].shape[-2]
+                        rounded_seqlen = round_up_seqlen(n)
+                        feature_dict = pad_feature_dict_seq(
+                            feature_dict, rounded_seqlen,
+                        )
+
+                    feature_dicts[tag] = feature_dict
+
+                processed_feature_dict = feature_processor.process_features(
+                    feature_dict, mode='predict',
                 )
+
+                processed_feature_dict = {
+                    k:torch.as_tensor(v, device=args.model_device)
+                    for k,v in processed_feature_dict.items()
+                }
 
                 if(args.trace_model):
-                    n = feature_dict["aatype"].shape[-2]
-                    rounded_seqlen = round_up_seqlen(n)
-                    feature_dict = pad_feature_dict_seq(
-                        feature_dict, rounded_seqlen,
+                    if(rounded_seqlen > cur_tracing_interval):
+                        logger.info(
+                            f"Tracing model at {rounded_seqlen} residues..."
+                        )
+                        t = time.perf_counter()
+                        trace_model_(model, processed_feature_dict)
+                        tracing_time = time.perf_counter() - t
+                        logger.info(
+                            f"Tracing time: {tracing_time}"
+                        )
+                        cur_tracing_interval = rounded_seqlen
+
+                out = run_model(model, processed_feature_dict, tag, args)
+
+                # Toss out the recycling dimensions --- we don't need them anymore
+                processed_feature_dict = tensor_tree_map(
+                    lambda x: np.array(x[..., -1].cpu()),
+                    processed_feature_dict
+                )
+                out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
+                
+                np.save(single_output_path, out['single'])
+                logger.info(f"Single rep written to {single_output_path}...")
+
+                '''
+                unrelaxed_protein = prep_output(
+                    out,
+                    processed_feature_dict,
+                    feature_dict,
+                    feature_processor,
+                    args
+                )
+
+                unrelaxed_output_path = os.path.join(
+                    output_directory, f'{output_name}_unrelaxed.pdb'
+                )
+
+                with open(unrelaxed_output_path, 'w') as fp:
+                    fp.write(protein.to_pdb(unrelaxed_protein))
+
+                logger.info(f"Output written to {unrelaxed_output_path}...")
+
+                if not args.skip_relaxation:
+                    amber_relaxer = relax.AmberRelaxation(
+                        use_gpu=(args.model_device != "cpu"),
+                        **config.relax,
                     )
 
-                feature_dicts[tag] = feature_dict
-
-            processed_feature_dict = feature_processor.process_features(
-                feature_dict, mode='predict',
-            )
-
-            processed_feature_dict = {
-                k:torch.as_tensor(v, device=args.model_device)
-                for k,v in processed_feature_dict.items()
-            }
-
-            if(args.trace_model):
-                if(rounded_seqlen > cur_tracing_interval):
-                    logger.info(
-                        f"Tracing model at {rounded_seqlen} residues..."
-                    )
+                    # Relax the prediction.
+                    logger.info(f"Running relaxation on {unrelaxed_output_path}...")
                     t = time.perf_counter()
-                    trace_model_(model, processed_feature_dict)
-                    tracing_time = time.perf_counter() - t
-                    logger.info(
-                        f"Tracing time: {tracing_time}"
+                    visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", default="")
+                    if "cuda" in args.model_device:
+                        device_no = args.model_device.split(":")[-1]
+                        os.environ["CUDA_VISIBLE_DEVICES"] = device_no
+                    relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
+                    os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
+                    relaxation_time = time.perf_counter() - t
+
+                    logger.info(f"Relaxation time: {relaxation_time}")
+                    update_timings({"relaxation": relaxation_time}, os.path.join(args.output_dir, "timings.json"))
+
+                    # Save the relaxed PDB.
+                    relaxed_output_path = os.path.join(
+                        output_directory, f'{output_name}_relaxed.pdb'
                     )
-                    cur_tracing_interval = rounded_seqlen
+                    with open(relaxed_output_path, 'w') as fp:
+                        fp.write(relaxed_pdb_str)
 
-            out = run_model(model, processed_feature_dict, tag, args)
+                    logger.info(f"Relaxed output written to {relaxed_output_path}...")
 
-            # Toss out the recycling dimensions --- we don't need them anymore
-            processed_feature_dict = tensor_tree_map(
-                lambda x: np.array(x[..., -1].cpu()),
-                processed_feature_dict
-            )
-            out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
-            single_output_path = os.path.join(args.output_dir, tag + '.npy')
-            np.save(single_output_path, out['single'])
-            logger.info(f"Single rep written to {single_output_path}...")
+                if args.save_outputs:
+                    output_dict_path = os.path.join(
+                        output_directory, f'{output_name}_output_dict.pkl'
+                    )
+                    with open(output_dict_path, "wb") as fp:
+                        pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
-            '''
-            unrelaxed_protein = prep_output(
-                out,
-                processed_feature_dict,
-                feature_dict,
-                feature_processor,
-                args
-            )
-
-            unrelaxed_output_path = os.path.join(
-                output_directory, f'{output_name}_unrelaxed.pdb'
-            )
-
-            with open(unrelaxed_output_path, 'w') as fp:
-                fp.write(protein.to_pdb(unrelaxed_protein))
-
-            logger.info(f"Output written to {unrelaxed_output_path}...")
-
-            if not args.skip_relaxation:
-                amber_relaxer = relax.AmberRelaxation(
-                    use_gpu=(args.model_device != "cpu"),
-                    **config.relax,
-                )
-
-                # Relax the prediction.
-                logger.info(f"Running relaxation on {unrelaxed_output_path}...")
-                t = time.perf_counter()
-                visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", default="")
-                if "cuda" in args.model_device:
-                    device_no = args.model_device.split(":")[-1]
-                    os.environ["CUDA_VISIBLE_DEVICES"] = device_no
-                relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
-                os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
-                relaxation_time = time.perf_counter() - t
-
-                logger.info(f"Relaxation time: {relaxation_time}")
-                update_timings({"relaxation": relaxation_time}, os.path.join(args.output_dir, "timings.json"))
-
-                # Save the relaxed PDB.
-                relaxed_output_path = os.path.join(
-                    output_directory, f'{output_name}_relaxed.pdb'
-                )
-                with open(relaxed_output_path, 'w') as fp:
-                    fp.write(relaxed_pdb_str)
-
-                logger.info(f"Relaxed output written to {relaxed_output_path}...")
-
-            if args.save_outputs:
-                output_dict_path = os.path.join(
-                    output_directory, f'{output_name}_output_dict.pkl'
-                )
-                with open(output_dict_path, "wb") as fp:
-                    pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
-
-                logger.info(f"Model output written to {output_dict_path}...")
-            '''
+                    logger.info(f"Model output written to {output_dict_path}...")
+                '''
+            except RuntimeError:
+                continue
 
 def update_timings(dict, output_file=os.path.join(os.getcwd(), "timings.json")):
     """Write dictionary of one or more run step times to a file"""
