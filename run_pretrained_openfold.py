@@ -17,6 +17,7 @@ import logging
 import math
 import numpy as np
 import os
+from pathlib import Path
 
 from openfold.utils.script_utils import load_models_from_command_line, parse_fasta, run_model, prep_output, \
     update_timings, relax_protein
@@ -143,7 +144,7 @@ def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
 
     config = model_config(args.config_preset, long_sequence_inference=args.long_sequence_inference)
-    
+
     if(args.trace_model):
         if(not config.data.predict.fixed_size):
             raise ValueError(
@@ -262,19 +263,21 @@ def main(args):
 
             # Toss out the recycling dimensions --- we don't need them anymore
             processed_feature_dict = tensor_tree_map(
-                lambda x: np.array(x[..., -1].cpu()), 
+                lambda x: np.array(x[..., -1].cpu()),
                 processed_feature_dict
             )
             out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
-            
+
             if args.save_single:
-                single_outdir = os.path.join(args.outdir, 'single')
+                single_outdir = os.path.join(args.output_dir, 'single')
+                Path(single_outdir).mkdir(parents=True, exist_ok=True)
                 single_output_path = os.path.join(single_outdir, tag + '.pt')
                 torch.save(out["sm"]["states"], single_output_path)
                 logger.info(f"Single reps written to {single_output_path}...")
 
             if args.save_pair:
-                pair_outdir = os.path.join(args.outdir, 'pair')
+                pair_outdir = os.path.join(args.output_dir, 'pair')
+                Path(pair_outdir).mkdir(parents=True, exist_ok=True)
                 pair_output_path = os.path.join(pair_outdir, tag + '.pt')
                 torch.save(out["sm"]["states"], pair_output_path)
                 logger.info(f"Pair rep written to {pair_output_path}...")
@@ -313,26 +316,26 @@ def main(args):
                     relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
                     os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
                     relaxation_time = time.perf_counter() - t
-    
+
                     logger.info(f"Relaxation time: {relaxation_time}")
                     update_timings({"relaxation": relaxation_time}, os.path.join(args.output_dir, "timings.json"))
-    
+
                     # Save the relaxed PDB.
                     relaxed_output_path = os.path.join(
                         output_directory, f'{output_name}_relaxed.pdb'
                     )
                     with open(relaxed_output_path, 'w') as fp:
                         fp.write(relaxed_pdb_str)
-    
+
                     logger.info(f"Relaxed output written to {relaxed_output_path}...")
-    
+
                 if args.save_outputs:
                     output_dict_path = os.path.join(
                         output_directory, f'{output_name}_output_dict.pkl'
                     )
                     with open(output_dict_path, "wb") as fp:
                         pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
-    
+
                     logger.info(f"Model output written to {output_dict_path}...")
 
 
