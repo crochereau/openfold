@@ -266,11 +266,18 @@ def main(args):
                 processed_feature_dict
             )
             out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
+            
+            if args.save_single:
+                single_outdir = os.path.join(args.outdir, 'single')
+                single_output_path = os.path.join(single_outdir, tag + '.pt')
+                torch.save(out["sm"]["states"], single_output_path)
+                logger.info(f"Single reps written to {single_output_path}...")
 
-            if args.save_single_rep:
-                single_output_path = os.path.join(args.output_dir, tag + '.npy')
-                np.save(single_output_path, out['single'])
-                logger.info(f"Single rep written to {single_output_path}...")
+            if args.save_pair:
+                pair_outdir = os.path.join(args.outdir, 'pair')
+                pair_output_path = os.path.join(pair_outdir, tag + '.pt')
+                torch.save(out["sm"]["states"], pair_output_path)
+                logger.info(f"Pair rep written to {pair_output_path}...")
 
             if args.save_structure:
                 unrelaxed_protein = prep_output(
@@ -372,8 +379,12 @@ if __name__ == "__main__":
         help="Whether to save all model outputs, including embeddings, etc."
     )
     parser.add_argument(
-        "--save_single_rep", action="store_true", default=False,
-        help="Whether to save all the single representation."
+        "--save_single", action="store_true", default=False,
+        help="Whether to save the single representations."
+    )
+    parser.add_argument(
+        "--save_pair", action="store_true", default=False,
+        help="Whether to save the pair representation."
     )
     parser.add_argument(
         "--save_structure", action="store_true", default=False,

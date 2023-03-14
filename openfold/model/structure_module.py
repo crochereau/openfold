@@ -681,6 +681,8 @@ class StructureModule(nn.Module):
         )
         outputs = []
         for i in range(self.no_blocks):   # Alg. 20 line 5
+            print('Structure module, layer', i)
+            
             # [*, N, C_s]
             s = s + self.ipa(             # Alg. 20 line 6
                 s, 
@@ -736,8 +738,6 @@ class StructureModule(nn.Module):
                 "angles": angles,
                 "positions": pred_xyz,
                 "states": s,   # single representation used for predicting structure (from Alg. 20 line 9)
-                # save pair representation used for predicting structure (from Alg. 20 line 2)
-                "final_pair": z,  # not i original code
             }
 
             outputs.append(preds)
@@ -752,7 +752,7 @@ class StructureModule(nn.Module):
             )
 
         outputs = dict_multimap(torch.stack, outputs)
-        outputs["single"] = s
+        outputs["single"] = s  # single representation used for predicting structure (from Alg. 20 line 9)
 
         return outputs
 
