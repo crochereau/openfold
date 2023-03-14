@@ -278,7 +278,7 @@ config = mlc.ConfigDict(
                     "same_prob": 0.1,
                     "uniform_prob": 0.1,
                 },
-                "max_recycling_iters": 3,
+                "max_recycling_iters": 1,  # 3, TODO: change back to 3
                 "msa_cluster_features": True,
                 "reduce_msa_clusters_by_max_templates": False,
                 "resample_msa_in_recycling": True,
@@ -507,8 +507,9 @@ config = mlc.ConfigDict(
                 "no_heads_ipa": 12,
                 "no_qk_points": 4,
                 "no_v_points": 8,
+                
                 "dropout_rate": 0.1,
-                "no_blocks": 8,
+                "no_blocks": 1,  # 8 TODO; change back to 8
                 "no_transition_layers": 1,
                 "no_resnet_blocks": 2,
                 "no_angles": 7,
