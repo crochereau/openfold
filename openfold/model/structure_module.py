@@ -648,7 +648,7 @@ class StructureModule(nn.Module):
         Returns:
             A dictionary of outputs
         """
-        s = evoformer_output_dict["single"]
+        s = evoformer_output_dict["single"]  # Alg. 20 line 1; s = s_initial
         
         if mask is None:
             # [*, N]
@@ -658,7 +658,7 @@ class StructureModule(nn.Module):
         s = self.layer_norm_s(s)
 
         # [*, N, N, C_z]
-        z = self.layer_norm_z(evoformer_output_dict["pair"])
+        z = self.layer_norm_z(evoformer_output_dict["pair"])  # Alg. 20 line 2
 
         z_reference_list = None
         if(_offload_inference):
@@ -669,10 +669,10 @@ class StructureModule(nn.Module):
 
         # [*, N, C_s]
         s_initial = s
-        s = self.linear_in(s)
+        s = self.linear_in(s)  # Alg. 20 line 3
 
         # [*, N]
-        rigids = Rigid.identity(
+        rigids = Rigid.identity(    # Alg. 20 line 4
             s.shape[:-1], 
             s.dtype, 
             s.device, 
@@ -680,9 +680,9 @@ class StructureModule(nn.Module):
             fmt="quat",
         )
         outputs = []
-        for i in range(self.no_blocks):
+        for i in range(self.no_blocks):   # Alg. 20 line 5
             # [*, N, C_s]
-            s = s + self.ipa(
+            s = s + self.ipa(             # Alg. 20 line 6
                 s, 
                 z, 
                 rigids, 
@@ -691,12 +691,12 @@ class StructureModule(nn.Module):
                 _offload_inference=_offload_inference, 
                 _z_reference_list=z_reference_list
             )
-            s = self.ipa_dropout(s)
-            s = self.layer_norm_ipa(s)
-            s = self.transition(s)
+            s = self.ipa_dropout(s)      # Alg. 20 line 7
+            s = self.layer_norm_ipa(s)   # Alg. 20 line 7 
+            s = self.transition(s)       # Alg. 20 lines 8 - 9
            
             # [*, N]
-            rigids = rigids.compose_q_update_vec(self.bb_update(s))
+            rigids = rigids.compose_q_update_vec(self.bb_update(s))  # Alg. 20 line 10
 
             # To hew as closely as possible to AlphaFold, we convert our
             # quaternion-based transformations to rotation-matrix ones
@@ -735,7 +735,9 @@ class StructureModule(nn.Module):
                 "unnormalized_angles": unnormalized_angles,
                 "angles": angles,
                 "positions": pred_xyz,
-                "states": s,
+                "states": s,   # single representation used for predicting structure (from Alg. 20 line 9)
+                # save pair representation used for predicting structure (from Alg. 20 line 2)
+                "final_pair": z,  # not i original code
             }
 
             outputs.append(preds)
