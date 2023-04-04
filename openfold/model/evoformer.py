@@ -820,9 +820,9 @@ class EvoformerStack(nn.Module):
             blocks_per_ckpt=blocks_per_ckpt,
         )
 
-        s = self.linear(m[..., 0, :, :])
+        s = self.linear(m[..., 0, :, :])  # Algo 6, line 12
 
-        return m, z, s
+        return m, z, s  # Algo 6, line 13
 
 
 class ExtraMSAStack(nn.Module):

@@ -279,7 +279,9 @@ def main(args):
                 pair_outdir = os.path.join(args.output_dir, 'pair')
                 Path(pair_outdir).mkdir(parents=True, exist_ok=True)
                 pair_output_path = os.path.join(pair_outdir, tag + '.pt')
-                torch.save(out["sm"]["states"], pair_output_path)
+                # TODO: save pair rep
+                # torch.save(out["pair"], pair_output_path)
+                #torch.save(out["sm"]["states"], pair_output_path)
                 logger.info(f"Pair rep written to {pair_output_path}...")
 
             if args.save_structure:
