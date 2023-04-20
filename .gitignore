@@ -8,3 +8,6 @@ dist
 data
 openfold/resources/
 tests/test_data/
+
+flash-attention/
+lib/conda/
