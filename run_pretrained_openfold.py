@@ -285,7 +285,8 @@ def main(args):
                     logger.info(f"Single reps written to {single_output_path}...")
 
                 if args.save_pair:
-                    torch.save(out["sm"]["states"], pair_output_path)
+                    # TODO: save pair rep, fix typo below
+                    #torch.save(out["sm"]["states"], pair_output_path)
                     logger.info(f"Pair rep written to {pair_output_path}...")
 
                 if args.save_structure:
