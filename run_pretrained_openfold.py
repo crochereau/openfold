@@ -223,6 +223,12 @@ def main(args):
                     if os.path.isfile(pair_output_path):
                         continue
 
+                if args.save_all_recycles:
+                    print('Starting')
+                    output_path = os.path.join(args.output_dir, tag + '.pt')
+                    if os.path.isfile(output_path):
+                        continue
+
                 output_name = f'{tag}_{args.config_preset}'
                 if args.output_postfix is not None:
                     output_name = f'{output_name}_{args.output_postfix}'
@@ -280,13 +286,15 @@ def main(args):
                 )
                 out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
 
+                if args.save_all_recycles:
+                    torch.save(out, output_path)
+
                 if args.save_single:
                     torch.save(out["sm"]["states"], single_output_path)
                     logger.info(f"Single reps written to {single_output_path}...")
 
                 if args.save_pair:
-                    # TODO: save pair rep, fix typo below
-                    #torch.save(out["sm"]["states"], pair_output_path)
+                    torch.save(out["pair"], pair_output_path)
                     logger.info(f"Pair rep written to {pair_output_path}...")
 
                 if args.save_structure:
@@ -398,6 +406,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save_pair", action="store_true", default=False,
         help="Whether to save the pair representation."
+    )
+    parser.add_argument(
+        "--save_all_recycles", action="store_true", default=False,
+        help="Whether to save representations from all recycles."
     )
     parser.add_argument(
         "--save_structure", action="store_true", default=False,

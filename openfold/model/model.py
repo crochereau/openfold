@@ -51,6 +51,9 @@ from openfold.utils.tensor_utils import (
     tensor_tree_map,
 )
 
+# TODO: turn back to False
+SAVE_ALL_ITERS = True
+
 
 class AlphaFold(nn.Module):
     """
@@ -495,9 +498,14 @@ class AlphaFold(nn.Module):
 
         is_grad_enabled = torch.is_grad_enabled()
 
+        # Initialize saved representations
+        if SAVE_ALL_ITERS:
+            reps_to_save = {}
+
         # Main recycling loop
         num_iters = batch["aatype"].shape[-1]
         for cycle_no in range(num_iters): 
+
             print('Recycling iteration', cycle_no)
             # Select the features for the current recycling cycle
             fetch_cur_batch = lambda t: t[..., cycle_no]
@@ -506,6 +514,7 @@ class AlphaFold(nn.Module):
             # Enable grad iff we're training and it's the final recycling layer
             is_final_iter = cycle_no == (num_iters - 1)
             with torch.set_grad_enabled(is_grad_enabled and is_final_iter):
+
                 if is_final_iter:
                     # Sidestep AMP bug (PyTorch issue #65766)
                     if torch.is_autocast_enabled():
@@ -519,9 +528,22 @@ class AlphaFold(nn.Module):
                 )
 
                 if(not is_final_iter):
+                    # Save reps at each recycle
+                    if SAVE_ALL_ITERS:
+                        reps_to_save[f"single_cycle_{cycle_no}"] = outputs["sm"]["states"]
+                        reps_to_save[f"pair_cycle_{cycle_no}"] = outputs["pair"]
+
                     del outputs
                     prevs = [m_1_prev, z_prev, x_prev]
                     del m_1_prev, z_prev, x_prev
+
+        # Save reps at last recycle
+        if SAVE_ALL_ITERS:
+            reps_to_save[f"single_cycle_{cycle_no}"] = outputs["sm"]["states"]
+            reps_to_save[f"pair_cycle_{cycle_no}"] = outputs["pair"]
+
+            # Return representations from all recycles
+            return reps_to_save
 
         # Run auxiliary heads
         outputs.update(self.aux_heads(outputs))
