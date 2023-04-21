@@ -530,7 +530,8 @@ class AlphaFold(nn.Module):
                 if(not is_final_iter):
                     # Save reps at each recycle
                     if SAVE_ALL_ITERS:
-                        reps_to_save[f"single_cycle_{cycle_no}"] = outputs["sm"]["states"]
+                        reps_to_save[f"states_cycle_{cycle_no}"] = outputs["sm"]["states"]
+                        reps_to_save[f"single_cycle_{cycle_no}"] = outputs["single"]
                         reps_to_save[f"pair_cycle_{cycle_no}"] = outputs["pair"]
 
                     del outputs
@@ -539,7 +540,8 @@ class AlphaFold(nn.Module):
 
         # Save reps at last recycle
         if SAVE_ALL_ITERS:
-            reps_to_save[f"single_cycle_{cycle_no}"] = outputs["sm"]["states"]
+            reps_to_save[f"states_cycle_{cycle_no}"] = outputs["sm"]["states"]
+            reps_to_save[f"single_cycle_{cycle_no}"] = outputs["single"]
             reps_to_save[f"pair_cycle_{cycle_no}"] = outputs["pair"]
 
             # Return representations from all recycles
