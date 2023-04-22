@@ -224,7 +224,6 @@ def main(args):
                         continue
 
                 if args.save_all_recycles:
-                    print('Starting')
                     output_path = os.path.join(args.output_dir, tag + '.pt')
                     if os.path.isfile(output_path):
                         continue
