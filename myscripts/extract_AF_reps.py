@@ -1,8 +1,12 @@
+import argparse
+import glob
 import os
 from os.path import join
 from pathlib import Path 
-import torch
 from tqdm import tqdm
+
+import torch
+
 
 # TODO: test script
 
@@ -18,16 +22,23 @@ def main(args):
     for file in tqdm(glob.glob(join(args.input_dir, "*.pt"))):
         reps = torch.load(file)
         for name, embed in reps.items():
-            # separately save each representation saved together in the input tensor
-            output_name = f"{name}.pt"
+            # save representations from the input tensor into separate subdirectories
+            protein_name = Path(file).stem
+            output_name = f"{protein_name}_{name}.pt"
             if "single" in name:
-                outfile = join(single_dir, output_name)
+                single_prot_dir = join(single_dir, protein_name)
+                Path(single_prot_dir).mkdir(parents=True, exist_ok=True)
+                outfile = join(single_prot_dir, output_name)
             elif "pair" in name:
-                outfile = join(pair_dir, output_name)
+                pair_prot_dir = join(pair_dir, protein_name)
+                Path(pair_prot_dir).mkdir(parents=True, exist_ok=True)
+                outfile = join(pair_prot_dir, output_name)
             elif "states" in name:
-                outfile = join(states_dir, output_name)
+                states_prot_dir =join(states_dir, protein_name)
+                Path(states_prot_dir).mkdir(parents=True, exist_ok=True)
+                outfile = join(states_prot_dir, output_name)
             else:
-                raise Exception("Representation name not referenced.")
+                raise Exception("Unknown representation name.")
             torch.save(embed, outfile)
         # remove input tensor
         os.remove(file)
@@ -35,7 +46,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("input_dir", type=str, required=True, help="Directory where input representations are saved.")
-    parser.add_argument("output_dir", type=str, required=True, help="Directory where output representations are saved.")
+    parser.add_argument("input_dir", type=str, help="Directory where input representations are saved.")
+    parser.add_argument("output_dir", type=str, help="Directory where output representations are saved.")
     args = parser.parse_args()
     main(args)
