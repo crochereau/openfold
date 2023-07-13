@@ -463,6 +463,7 @@ def make_masked_msa(protein, config, replace_fraction):
         1.0 - config.profile_prob - config.same_prob - config.uniform_prob
     )
     assert mask_prob >= 0.0
+
     categorical_probs = torch.nn.functional.pad(
         categorical_probs, pad_shapes, value=mask_prob
     )
@@ -660,7 +661,7 @@ def make_atom14_masks(protein):
 
 def make_atom14_masks_np(batch):
     batch = tree_map(
-        lambda n: torch.tensor(n, device=batch["aatype"].device), 
+        lambda n: torch.tensor(n, device="cpu"), 
         batch, 
         np.ndarray
     )
@@ -727,6 +728,7 @@ def make_atom14_positions(protein):
             for index, correspondence in enumerate(correspondences):
                 renaming_matrix[index, correspondence] = 1.0
         all_matrices[resname] = renaming_matrix
+    
     renaming_matrices = torch.stack(
         [all_matrices[restype] for restype in restype_3]
     )
