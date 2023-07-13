@@ -352,19 +352,19 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "fasta_dir", type=str,
+        "--fasta_dir", type=str, default="../function_pred/data/fastas/0_to_128",
         help="Path to directory of FASTA files, one sequence per file"
     )
     parser.add_argument(
-        "--feats_dir", type=str, default="../function_pred/data/alphafold"
+        "--feats_dir", type=str, default="../function_pred/data/alphafold",
         help="Path to AF data directory."
     )
     parser.add_argument(
-        "--single_dir", type=str, default="single"
+        "--single_dir", type=str, default="single",
         help="Path to single representation directory."
     )
     parser.add_argument(
-        "--pair_dir", type=str, default="pair"
+        "--pair_dir", type=str, default="pair",
         help="Path to pair representation directory."
     )
     parser.add_argument(
