@@ -412,8 +412,6 @@ class AlphaFold(nn.Module):
 
         del z
 
-        print('Evoformer done')
-
         # Predict 3D structure
         outputs["sm"] = self.structure_module(
             outputs,
@@ -506,7 +504,6 @@ class AlphaFold(nn.Module):
         num_iters = batch["aatype"].shape[-1]
         for cycle_no in range(num_iters): 
 
-            print('Recycling iteration', cycle_no)
             # Select the features for the current recycling cycle
             fetch_cur_batch = lambda t: t[..., cycle_no]
             feats = tensor_tree_map(fetch_cur_batch, batch)
