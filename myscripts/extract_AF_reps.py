@@ -46,7 +46,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("input_dir", type=str, default="../../function_pred/data/alphafold", help="Directory where input representations are saved.")
-    parser.add_argument("output_dir", type=str, default="../../function_pred/data/alphafold", help="Directory where output representations are saved.")
+    parser.add_argument("input_dir", type=str, default="../../function_pred/data/alphafold_testing", help="Directory where input representations are saved.")
+    parser.add_argument("output_dir", type=str, default="../../function_pred/data/alphafold_testing", help="Directory where output representations are saved.")
     args = parser.parse_args()
     main(args)
