@@ -97,7 +97,7 @@ def generate_feature_dict_(
 def process_fasta_(
     fasta_path: str,
 ) -> FeatureDict:
-    """Assembles features for a single sequence in a FASTA file""" 
+    """Assembles features for a single sequence in a FASTA file"""
     with open(fasta_path) as f:
         fasta_str = f.read()
     input_seqs, input_descs = parsers.parse_fasta(fasta_str)
@@ -114,7 +114,7 @@ def process_fasta_(
         description=input_description,
         num_res=num_res,
     )
-    
+
     return {
         **sequence_features
     }
@@ -155,7 +155,7 @@ def process_features(feats: FeatureDict, iters: int) -> TensorDict:
     seq_mask = make_sequence_mask(feats=feats, iters=iters)
     processed_feats["aatype"] = aatype
     processed_feats["seq_mask"] = seq_mask
-    processed_feats = cast_to_64bit_ints(processed_feats) 
+    processed_feats = cast_to_64bit_ints(processed_feats)
     return processed_feats
 
 def list_files_with_extensions(dir, extensions):
@@ -212,7 +212,9 @@ def main(args):
         args.model_device,
         args.openfold_checkpoint_path,
         args.jax_param_path,
-        args.output_dir)
+        args.output_dir,
+        use_small_model=True
+)
 
     for model, output_directory in model_generator:
         cur_tracing_interval = 0
@@ -223,7 +225,6 @@ def main(args):
 
             si = torch.load(single_rep_file)
             zij = torch.load(pair_rep_file)
-            import pdb; pdb.set_trace()
 
             output_name = f'{tag}_{args.config_preset}'
             if args.output_postfix is not None:
@@ -247,7 +248,7 @@ def main(args):
                     )
 
                 feature_dicts[tag] = feature_dict
-            
+
             # feature dict with only seq_mask, aatype
             num_iters = config.data.common.max_recycling_iters + 1
             processed_feature_dict = process_features(feature_dict, num_iters)
@@ -255,9 +256,7 @@ def main(args):
             # add saved reps to feature dict
             processed_feature_dict['single'] = si
             processed_feature_dict['pair'] = zij
-            import pdb; pdb.set_trace()
 
-            
             processed_feature_dict = {
                 k:torch.as_tensor(v, device=args.model_device)
                 for k,v in processed_feature_dict.items()
@@ -275,7 +274,7 @@ def main(args):
                         f"Tracing time: {tracing_time}"
                     )
                     cur_tracing_interval = rounded_seqlen
-            import pdb; pdb.set_trace()
+
             out = run_model(model, processed_feature_dict, tag, args.output_dir, use_small_model=True)
 
             # Toss out the recycling dimensions --- we don't need them anymore
@@ -297,22 +296,22 @@ def main(args):
                     feature_processor,
                     args
                 )
-    
+
                 unrelaxed_output_path = os.path.join(
                     output_directory, f'{output_name}_unrelaxed.pdb'
                 )
-    
+
                 with open(unrelaxed_output_path, 'w') as fp:
                     fp.write(protein.to_pdb(unrelaxed_protein))
-    
+
                 logger.info(f"Output written to {unrelaxed_output_path}...")
-    
+
                 if not args.skip_relaxation:
                     amber_relaxer = relax.AmberRelaxation(
                         use_gpu=(args.model_device != "cpu"),
                         **config.relax,
                     )
-    
+
                     # Relax the prediction.
                     logger.info(f"Running relaxation on {unrelaxed_output_path}...")
                     t = time.perf_counter()
@@ -344,7 +343,7 @@ def main(args):
                         pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
                     logger.info(f"Model output written to {output_dict_path}...")
-                        
+
             #except RuntimeError:
                 #continue
 
@@ -376,7 +375,7 @@ if __name__ == "__main__":
         help="""Number of iteration at which to predict the structure"""
     )
     parser.add_argument(
-        "--model_device", type=str, default="cpu",
+        "--model_device", type=str, default="cuda:0",
         help="""Name of the device on which to run the model. Any valid torch
              device name is accepted (e.g. "cpu", "cuda:0")"""
     )

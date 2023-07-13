@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import json
 import logging
 import os
@@ -67,11 +68,15 @@ def load_models_from_command_line(
             import_jax_weights_(
                 model, path, version=model_version
             )
-            # TODO: load smaller AF model with partial pretrained weights
+
+            # use reduced AF model with only subset of pretrained weights
             if use_small_model:
-                import pdb; pdb.set_trace()
                 model_small = AlphaFold_small(config)
-                import pdb; pdb.set_trace()
+                # load only relevant subset of pretrained weights
+                pretrained_dict = OrderedDict([(k,v) for k,v in model.state_dict().items() if ('structure_module' in k) or ('aux_heads' in k)])
+                model_small.load_state_dict(pretrained_dict)
+                del model
+                model = model_small
 
             model = model.to(model_device)
             logger.info(
