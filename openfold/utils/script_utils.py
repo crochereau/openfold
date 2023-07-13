@@ -8,6 +8,7 @@ import numpy
 import torch
 
 from openfold.model.model import AlphaFold
+from openfold.model.model_small import AlphaFold_small
 from openfold.np import residue_constants, protein
 from openfold.np.relax import relax
 from openfold.utils.import_weights import (
@@ -49,7 +50,8 @@ def make_output_directory(output_dir, model_name, multiple_model_mode):
     return prediction_dir
 
 
-def load_models_from_command_line(config, model_device, openfold_checkpoint_path, jax_param_path, output_dir):
+def load_models_from_command_line(
+    config, model_device, openfold_checkpoint_path, jax_param_path, output_dir, use_small_model: bool=False):
     # Create the output directory
 
     multiple_model_mode = count_models_to_evaluate(openfold_checkpoint_path, jax_param_path) > 1
@@ -65,6 +67,12 @@ def load_models_from_command_line(config, model_device, openfold_checkpoint_path
             import_jax_weights_(
                 model, path, version=model_version
             )
+            # TODO: load smaller AF model with partial pretrained weights
+            if use_small_model:
+                import pdb; pdb.set_trace()
+                model_small = AlphaFold_small(config)
+                import pdb; pdb.set_trace()
+
             model = model.to(model_device)
             logger.info(
                 f"Successfully loaded JAX parameters at {path}..."
