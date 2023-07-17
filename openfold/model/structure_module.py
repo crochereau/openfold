@@ -255,7 +255,7 @@ class InvariantPointAttention(nn.Module):
             z = _z_reference_list
         else:
             z = [z]
-       
+
         #######################################
         # Generate scalar and point activations
         #######################################
@@ -307,7 +307,7 @@ class InvariantPointAttention(nn.Module):
         ##########################
         # [*, N_res, N_res, H]
         b = self.linear_b(z[0])
-        
+
         if(_offload_inference):
             assert(sys.getrefcount(z[0]) == 2)
             z[0] = z[0].cpu()
@@ -324,7 +324,7 @@ class InvariantPointAttention(nn.Module):
                 permute_final_dims(q, (1, 0, 2)),  # [*, H, N_res, C_hidden]
                 permute_final_dims(k, (1, 2, 0)),  # [*, H, C_hidden, N_res]
             )
-        
+
         a *= math.sqrt(1.0 / (3 * self.c_hidden))
         a += (math.sqrt(1.0 / 3) * permute_final_dims(b, (2, 0, 1)))
 
@@ -356,7 +356,7 @@ class InvariantPointAttention(nn.Module):
 
         # [*, H, N_res, N_res]
         pt_att = permute_final_dims(pt_att, (2, 0, 1))
-        
+
         if(inplace_safe):
             a += pt_att
             del pt_att
@@ -427,7 +427,7 @@ class InvariantPointAttention(nn.Module):
                 (o, *torch.unbind(o_pt, dim=-1), o_pt_norm, o_pair), dim=-1
             ).to(dtype=z[0].dtype)
         )
-        
+
         return s
 
 
@@ -649,7 +649,7 @@ class StructureModule(nn.Module):
             A dictionary of outputs
         """
         s = evoformer_output_dict["single"]  # Alg. 20 line 1; s = s_initial
-        
+
         if mask is None:
             # [*, N]
             mask = s.new_ones(s.shape[:-1])
@@ -673,30 +673,30 @@ class StructureModule(nn.Module):
 
         # [*, N]
         rigids = Rigid.identity(    # Alg. 20 line 4
-            s.shape[:-1], 
-            s.dtype, 
-            s.device, 
+            s.shape[:-1],
+            s.dtype,
+            s.device,
             self.training,
             fmt="quat",
         )
         outputs = []
         for i in range(self.no_blocks):   # Alg. 20 line 5
             print('Structure module, layer', i)
-            
+
             # [*, N, C_s]
             s = s + self.ipa(             # Alg. 20 line 6
-                s, 
-                z, 
-                rigids, 
-                mask, 
+                s,
+                z,
+                rigids,
+                mask,
                 inplace_safe=inplace_safe,
-                _offload_inference=_offload_inference, 
+                _offload_inference=_offload_inference,
                 _z_reference_list=z_reference_list
             )
             s = self.ipa_dropout(s)      # Alg. 20 line 7
-            s = self.layer_norm_ipa(s)   # Alg. 20 line 7 
+            s = self.layer_norm_ipa(s)   # Alg. 20 line 7
             s = self.transition(s)       # Alg. 20 lines 8 - 9
-           
+
             # [*, N]
             rigids = rigids.compose_q_update_vec(self.bb_update(s))  # Alg. 20 line 10
 
@@ -705,7 +705,7 @@ class StructureModule(nn.Module):
             # here
             backb_to_global = Rigid(
                 Rotation(
-                    rot_mats=rigids.get_rots().get_rot_mats(), 
+                    rot_mats=rigids.get_rots().get_rot_mats(),
                     quats=None
                 ),
                 rigids.get_trans(),
@@ -730,7 +730,7 @@ class StructureModule(nn.Module):
             )
 
             scaled_rigids = rigids.scale_translation(self.trans_scale_factor)
-            
+
             preds = {
                 "frames": scaled_rigids.to_tensor_7(),
                 "sidechain_frames": all_frames_to_global.to_tensor_4x4(),
@@ -745,7 +745,7 @@ class StructureModule(nn.Module):
             rigids = rigids.stop_rot_gradient()
 
         del z, z_reference_list
-        
+
         if(_offload_inference):
             evoformer_output_dict["pair"] = (
                 evoformer_output_dict["pair"].to(s.device)
