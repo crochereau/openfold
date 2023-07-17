@@ -52,7 +52,7 @@ from openfold.utils.tensor_utils import (
 )
 
 # TODO: turn back to False
-SAVE_ALL_ITERS = True
+SAVE_ALL_ITERS = False
 
 
 class AlphaFold_small(nn.Module):
@@ -81,8 +81,7 @@ class AlphaFold_small(nn.Module):
             self.config["heads"],
         )
 
-    def iteration(self, feats, prevs, _recycle=True):
-   
+    def iteration(self, feats, _recycle=True):
         # Primary output dictionary
         outputs = {}
 
@@ -99,7 +98,7 @@ class AlphaFold_small(nn.Module):
         device = feats["target_feat"].device
         """
         # device = feats["aatype"].device
-        
+
         # Controls whether the model uses in-place operations throughout
         # The dual condition accounts for activation checkpoints
         inplace_safe = not (self.training or torch.is_grad_enabled())
@@ -109,15 +108,13 @@ class AlphaFold_small(nn.Module):
         outputs["single"] = feats['single']
         # pair: [*, N, N, C_z]
         outputs["pair"] = feats['pair']
-
-        import pdb; pdb.set_trace()
         del feats['pair']
 
         # Predict 3D structure
         outputs["sm"] = self.structure_module(
             outputs,
             feats["aatype"],
-            mask=feats["seq_mask"].to(dtype=s.dtype),
+            mask=feats["seq_mask"].to(dtype=outputs["single"].dtype),
             inplace_safe=inplace_safe,
             _offload_inference=self.globals.offload_inference,
         )
@@ -187,13 +184,10 @@ class AlphaFold_small(nn.Module):
             reps_to_save = {}
 
         # Main recycling loop
-        num_iters = batch["aatype"].shape[-1]
+        # no recycling
+        num_iters = 1
         for cycle_no in range(num_iters): # num_iters = 1, ie single iteration
-
-            # Select the features for the current recycling cycle
-            fetch_cur_batch = lambda t: t[..., cycle_no]
-            feats = tensor_tree_map(fetch_cur_batch, batch)
-
+            print(cycle_no, num_iters)
             # Enable grad iff we're training and it's the final recycling layer
             is_final_iter = cycle_no == (num_iters - 1)
             with torch.set_grad_enabled(is_grad_enabled and is_final_iter):
@@ -205,8 +199,7 @@ class AlphaFold_small(nn.Module):
 
                 # Run the next iteration of the model
                 outputs = self.iteration(
-                    feats,
-                    prevs,
+                    batch,
                     _recycle=(num_iters > 1)
                 )
 
