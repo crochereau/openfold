@@ -51,7 +51,7 @@ torch.set_grad_enabled(False)
 
 from openfold.config import model_config
 from openfold.data import templates, feature_pipeline, data_pipeline
-from openfold.np import residue_constants, protein
+from openfold.np import residue_constants, protein_new
 import openfold.np.relax.relax as relax
 
 from openfold.utils.tensor_utils import (
@@ -151,6 +151,7 @@ def make_sequence_mask(feats: FeatureDict, iters: int) -> torch.Tensor:
 
 def process_features(feats: FeatureDict, iters: int) -> TensorDict:
     processed_feats = {}
+    processed_feats["residue_index"] = feats["residue_index"]
     aatype = process_aatype(feats=feats, iters=iters)
     seq_mask = make_sequence_mask(feats=feats, iters=iters)
     processed_feats["aatype"] = aatype
@@ -281,16 +282,8 @@ def main(args):
 
             out = run_model(model, processed_feature_dict, tag, args.output_dir)
 
-            # Toss out the recycling dimensions --- we don't need them anymore
-            processed_feature_dict = tensor_tree_map(
-                lambda x: np.array(x[..., -1].cpu()),
-                processed_feature_dict
-            )
+            processed_feature_dict = tensor_tree_map(lambda x: np.array(x.cpu()), processed_feature_dict)
             out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
-
-            # TODO
-            # sanity check: save states reps on a few examples
-            # to see if match previously saved reps
 
             if args.save_structure:
                 unrelaxed_protein = prep_output(
@@ -298,7 +291,9 @@ def main(args):
                     processed_feature_dict,
                     feature_dict,
                     feature_processor,
-                    args
+                    args.config_preset,
+                    args.multimer_ri_gap,
+                    args.subtract_plddt
                 )
 
                 unrelaxed_output_path = os.path.join(
@@ -306,7 +301,7 @@ def main(args):
                 )
 
                 with open(unrelaxed_output_path, 'w') as fp:
-                    fp.write(protein.to_pdb(unrelaxed_protein))
+                    fp.write(protein_new.to_pdb(unrelaxed_protein))
 
                 logger.info(f"Output written to {unrelaxed_output_path}...")
 
@@ -347,7 +342,7 @@ def main(args):
                         pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
                     logger.info(f"Model output written to {output_dict_path}...")
-
+        break
             #except RuntimeError:
                 #continue
 
