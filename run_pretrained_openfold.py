@@ -257,7 +257,6 @@ def main(args):
             processed_feature_dict = feature_processor.process_features(
                 feature_dict, mode='predict',
             )
-            import pdb; pdb.set_trace()
             processed_feature_dict = {
                 k:torch.as_tensor(v, device=args.model_device)
                 for k,v in processed_feature_dict.items()
@@ -302,24 +301,26 @@ def main(args):
                     processed_feature_dict,
                     feature_dict,
                     feature_processor,
-                    args
+                    args.config_preset,
+                    args.multimer_ri_gap,
+                    args.subtract_plddt
                 )
-    
+
                 unrelaxed_output_path = os.path.join(
                     output_directory, f'{output_name}_unrelaxed.pdb'
                 )
-    
+
                 with open(unrelaxed_output_path, 'w') as fp:
                     fp.write(protein.to_pdb(unrelaxed_protein))
-    
+
                 logger.info(f"Output written to {unrelaxed_output_path}...")
-    
+
                 if not args.skip_relaxation:
                     amber_relaxer = relax.AmberRelaxation(
                         use_gpu=(args.model_device != "cpu"),
                         **config.relax,
                     )
-    
+
                     # Relax the prediction.
                     logger.info(f"Running relaxation on {unrelaxed_output_path}...")
                     t = time.perf_counter()
