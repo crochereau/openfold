@@ -257,7 +257,7 @@ def main(args):
             processed_feature_dict = feature_processor.process_features(
                 feature_dict, mode='predict',
             )
-
+            import pdb; pdb.set_trace()
             processed_feature_dict = {
                 k:torch.as_tensor(v, device=args.model_device)
                 for k,v in processed_feature_dict.items()
@@ -351,7 +351,7 @@ def main(args):
                         pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
                     logger.info(f"Model output written to {output_dict_path}...")
-                        
+
             #except RuntimeError:
                 #continue
 
@@ -359,14 +359,14 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "fasta_dir", type=str,
+        "--fasta_dir", type=str, default="../function_pred/data/fastas/0_to_128",
         help="Path to directory containing FASTA files, one sequence per file"
     )
     parser.add_argument(
-        "template_mmcif_dir", type=str,
+        "--template_mmcif_dir", type=str, default="../data/pdb_mmcif/mmcif_files",
     )
     parser.add_argument(
-        "--use_precomputed_alignments", type=str, default=None,
+        "--use_precomputed_alignments", type=str, default="../data/alignments",
         help="""Path to alignment directory. If provided, alignment computation
                 is skipped and database path arguments are ignored."""
     )
@@ -375,7 +375,7 @@ if __name__ == "__main__":
         help="""Name of the directory in which to output the prediction""",
     )
     parser.add_argument(
-        "--model_device", type=str, default="cpu",
+        "--model_device", type=str, default="cuda:0",
         help="""Name of the device on which to run the model. Any valid torch
              device name is accepted (e.g. "cpu", "cuda:0")"""
     )
