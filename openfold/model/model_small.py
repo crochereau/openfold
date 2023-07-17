@@ -26,7 +26,7 @@ from openfold.model.embedders import (
     ExtraMSAEmbedder,
 )
 from openfold.model.evoformer import EvoformerStack, ExtraMSAStack
-from openfold.model.heads import AuxiliaryHeads
+from openfold.model.heads import AuxiliaryHeadsSmall
 from openfold.model.structure_module import StructureModule
 from openfold.model.template import (
     TemplatePairStack,
@@ -77,7 +77,7 @@ class AlphaFold_small(nn.Module):
         self.structure_module = StructureModule(
             **self.config["structure_module"],
         )
-        self.aux_heads = AuxiliaryHeads(
+        self.aux_heads = AuxiliaryHeadsSmall(
             self.config["heads"],
         )
 
