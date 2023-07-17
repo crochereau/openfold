@@ -20,7 +20,7 @@ import os
 from pathlib import Path
 
 from openfold.data import parsers
-from openfold.data.data_transforms import make_seq_mask, cast_to_64bit_ints
+from openfold.data.data_transforms import make_seq_mask, cast_to_64bit_ints, make_atom14_masks
 from openfold.utils.script_utils import load_models_from_command_line, parse_fasta, run_model, prep_output, \
     update_timings, relax_protein
 
@@ -142,11 +142,11 @@ def make_sequence_features_(
 
 def process_aatype(feats: FeatureDict, iters: int) -> torch.Tensor:
     aatype = torch.tensor(feats['aatype'], dtype=torch.int64)
-    aatype = torch.argmax(aatype, dim=-1).unsqueeze(-1).expand((aatype.shape[0], iters))
+    aatype = torch.argmax(aatype, dim=-1)
     return aatype
 
 def make_sequence_mask(feats: FeatureDict, iters: int) -> torch.Tensor:
-    mask = torch.ones((len(feats['seq_length']), iters), dtype=torch.int64)
+    mask = torch.ones(len(feats['seq_length']), dtype=torch.int64)
     return mask
 
 def process_features(feats: FeatureDict, iters: int) -> TensorDict:
@@ -155,6 +155,7 @@ def process_features(feats: FeatureDict, iters: int) -> TensorDict:
     seq_mask = make_sequence_mask(feats=feats, iters=iters)
     processed_feats["aatype"] = aatype
     processed_feats["seq_mask"] = seq_mask
+    processed_feats = make_atom14_masks(processed_feats)
     processed_feats = cast_to_64bit_ints(processed_feats)
     return processed_feats
 
@@ -223,8 +224,10 @@ def main(args):
             single_rep_file = single_dir / Path(tag) / Path(f"{tag}_single_{args.iter}.pt")
             pair_rep_file = pair_dir / Path(tag) / Path(f"{tag}_pair_{args.iter}.pt")
 
-            si = torch.load(single_rep_file)
-            zij = torch.load(pair_rep_file)
+            # [N, C_s]
+            si = torch.as_tensor(torch.load(single_rep_file))
+            # [N, C_z, C_z]
+            zij = torch.as_tensor(torch.load(pair_rep_file))
 
             output_name = f'{tag}_{args.config_preset}'
             if args.output_postfix is not None:
@@ -257,6 +260,7 @@ def main(args):
             processed_feature_dict['single'] = si
             processed_feature_dict['pair'] = zij
 
+            # add batch dim
             processed_feature_dict = {
                 k:torch.as_tensor(v, device=args.model_device)
                 for k,v in processed_feature_dict.items()
@@ -275,7 +279,7 @@ def main(args):
                     )
                     cur_tracing_interval = rounded_seqlen
 
-            out = run_model(model, processed_feature_dict, tag, args.output_dir, use_small_model=True)
+            out = run_model(model, processed_feature_dict, tag, args.output_dir)
 
             # Toss out the recycling dimensions --- we don't need them anymore
             processed_feature_dict = tensor_tree_map(
