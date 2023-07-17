@@ -164,7 +164,7 @@ def model_config(
         c.model.template.template_pair_stack.tune_chunk_size = False
         c.model.extra_msa.extra_msa_stack.tune_chunk_size = False
         c.model.evoformer_stack.tune_chunk_size = False
-    
+
     if train:
         c.globals.blocks_per_ckpt = 1
         c.globals.chunk_size = None
@@ -172,7 +172,7 @@ def model_config(
         c.globals.offload_inference = False
         c.model.template.average_templates = False
         c.model.template.offload_templates = False
-    
+
     if low_prec:
         c.globals.eps = 1e-4
         # If we want exact numerical parity with the original, inf can't be
@@ -278,7 +278,7 @@ config = mlc.ConfigDict(
                     "same_prob": 0.1,
                     "uniform_prob": 0.1,
                 },
-                "max_recycling_iters": 0, #3, 
+                "max_recycling_iters": 0, #3,
                 "msa_cluster_features": True,
                 "reduce_msa_clusters_by_max_templates": False,
                 "resample_msa_in_recycling": True,
