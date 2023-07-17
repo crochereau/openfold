@@ -26,7 +26,7 @@ from openfold.model.embedders import (
     ExtraMSAEmbedder,
 )
 from openfold.model.evoformer import EvoformerStack, ExtraMSAStack
-from openfold.model.heads import AuxiliaryHeadsSmall
+from openfold.model.heads_small import AuxiliaryHeadsSmall
 from openfold.model.structure_module import StructureModule
 from openfold.model.template import (
     TemplatePairStack,
@@ -187,7 +187,6 @@ class AlphaFold_small(nn.Module):
         # no recycling
         num_iters = 1
         for cycle_no in range(num_iters): # num_iters = 1, ie single iteration
-            print(cycle_no, num_iters)
             # Enable grad iff we're training and it's the final recycling layer
             is_final_iter = cycle_no == (num_iters - 1)
             with torch.set_grad_enabled(is_grad_enabled and is_final_iter):
