@@ -37,6 +37,10 @@ class AuxiliaryHeadsSmall(nn.Module):
             **config["distogram"],
         )
 
+        self.masked_msa = MaskedMSAHead(
+            **config["masked_msa"],
+        )
+
         self.experimentally_resolved = ExperimentallyResolvedHead(
             **config["experimentally_resolved"],
         )

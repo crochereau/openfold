@@ -151,6 +151,7 @@ def make_sequence_mask(feats: FeatureDict, iters: int) -> torch.Tensor:
 
 def process_features(feats: FeatureDict, iters: int) -> TensorDict:
     processed_feats = {}
+    processed_feats["residue_index"] = feats["residue_index"]
     aatype = process_aatype(feats=feats, iters=iters)
     seq_mask = make_sequence_mask(feats=feats, iters=iters)
     processed_feats["aatype"] = aatype
@@ -281,16 +282,8 @@ def main(args):
 
             out = run_model(model, processed_feature_dict, tag, args.output_dir)
 
-            # Toss out the recycling dimensions --- we don't need them anymore
-            processed_feature_dict = tensor_tree_map(
-                lambda x: np.array(x[..., -1].cpu()),
-                processed_feature_dict
-            )
+            processed_feature_dict = tensor_tree_map(lambda x: np.array(x.cpu()), processed_feature_dict)
             out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
-
-            # TODO
-            # sanity check: save states reps on a few examples
-            # to see if match previously saved reps
 
             if args.save_structure:
                 unrelaxed_protein = prep_output(
@@ -298,7 +291,9 @@ def main(args):
                     processed_feature_dict,
                     feature_dict,
                     feature_processor,
-                    args
+                    args.config_preset,
+                    args.multimer_ri_gap,
+                    args.subtract_plddt
                 )
 
                 unrelaxed_output_path = os.path.join(
@@ -306,7 +301,10 @@ def main(args):
                 )
 
                 with open(unrelaxed_output_path, 'w') as fp:
-                    fp.write(protein.to_pdb(unrelaxed_protein))
+                    if args.cif_output:
+                        fp.write(protein.to_modelcif(unrelaxed_protein))
+                    if args.pdb_output:
+                        fp.write(protein.to_pdb(unrelaxed_protein))
 
                 logger.info(f"Output written to {unrelaxed_output_path}...")
 
@@ -340,6 +338,7 @@ def main(args):
                     logger.info(f"Relaxed output written to {relaxed_output_path}...")
 
                 if args.save_outputs:
+                    import pdb; pdb.set_trace()
                     output_dict_path = os.path.join(
                         output_directory, f'{output_name}_output_dict.pkl'
                     )
@@ -347,7 +346,7 @@ def main(args):
                         pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
                     logger.info(f"Model output written to {output_dict_path}...")
-
+            break
             #except RuntimeError:
                 #continue
 
@@ -371,7 +370,7 @@ if __name__ == "__main__":
         help="Path to pair representation directory."
     )
     parser.add_argument(
-        "--output_dir", type=str, default=os.getcwd(),
+        "--output_dir", type=str, default="../function_pred/data/alphafold/structures",
         help="""Name of the directory in which to output the prediction""",
     )
     parser.add_argument(
@@ -442,6 +441,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--long_sequence_inference", action="store_true", default=False,
         help="""enable options to reduce memory usage at the cost of speed, helps longer sequences fit into GPU memory, see the README for details"""
+    )
+    parser.add_argument(
+        "--cif_output", action="store_true", default=True,
+        help="Output predicted models in ModelCIF format instead of PDB format (default)"
+    )
+    parser.add_argument(
+        "--pdb_output", action="store_true", default=False,
+        help="Output predicted models in PDB format."
     )
     add_data_args(parser)
     args = parser.parse_args()

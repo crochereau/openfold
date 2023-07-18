@@ -257,7 +257,6 @@ def main(args):
             processed_feature_dict = feature_processor.process_features(
                 feature_dict, mode='predict',
             )
-            import pdb; pdb.set_trace()
             processed_feature_dict = {
                 k:torch.as_tensor(v, device=args.model_device)
                 for k,v in processed_feature_dict.items()
@@ -302,24 +301,32 @@ def main(args):
                     processed_feature_dict,
                     feature_dict,
                     feature_processor,
-                    args
+                    args.config_preset,
+                    args.multimer_ri_gap,
+                    args.subtract_plddt
                 )
-    
+
                 unrelaxed_output_path = os.path.join(
                     output_directory, f'{output_name}_unrelaxed.pdb'
                 )
-    
+
                 with open(unrelaxed_output_path, 'w') as fp:
                     fp.write(protein.to_pdb(unrelaxed_protein))
-    
+
+                with open(unrelaxed_output_path, 'w') as fp:
+                    if args.cif_output:
+                        fp.write(protein.to_modelcif(unrelaxed_protein))
+                    if args.pdb_output:
+                        fp.write(protein.to_pdb(unrelaxed_protein))
+
                 logger.info(f"Output written to {unrelaxed_output_path}...")
-    
+
                 if not args.skip_relaxation:
                     amber_relaxer = relax.AmberRelaxation(
                         use_gpu=(args.model_device != "cpu"),
                         **config.relax,
                     )
-    
+
                     # Relax the prediction.
                     logger.info(f"Running relaxation on {unrelaxed_output_path}...")
                     t = time.perf_counter()
@@ -344,14 +351,16 @@ def main(args):
                     logger.info(f"Relaxed output written to {relaxed_output_path}...")
 
                 if args.save_outputs:
+                    import pdb; pdb.set_trace()
                     output_dict_path = os.path.join(
                         output_directory, f'{output_name}_output_dict.pkl'
                     )
                     with open(output_dict_path, "wb") as fp:
                         pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
-                    logger.info(f"Model output written to {output_dict_path}...")
 
+                    logger.info(f"Model output written to {output_dict_path}...")
+            break
             #except RuntimeError:
                 #continue
 
@@ -450,6 +459,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--long_sequence_inference", action="store_true", default=False,
         help="""enable options to reduce memory usage at the cost of speed, helps longer sequences fit into GPU memory, see the README for details"""
+    )
+    parser.add_argument(
+        "--cif_output", action="store_true", default=True,
+        help="Output predicted models in ModelCIF format instead of PDB format (default)"
+    )
+    parser.add_argument(
+        "--pdb_output", action="store_true", default=False,
+        help="Output predicted models in PDB format."
     )
     add_data_args(parser)
     args = parser.parse_args()
