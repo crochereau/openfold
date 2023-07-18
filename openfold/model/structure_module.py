@@ -681,7 +681,7 @@ class StructureModule(nn.Module):
         )
         outputs = []
         for i in range(self.no_blocks):   # Alg. 20 line 5
-            print('Structure module, layer', i)
+            #print('Structure module, layer', i)
 
             # [*, N, C_s]
             s = s + self.ipa(             # Alg. 20 line 6
