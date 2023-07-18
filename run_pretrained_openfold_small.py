@@ -338,12 +338,16 @@ def main(args):
                     logger.info(f"Relaxed output written to {relaxed_output_path}...")
 
                 if args.save_outputs:
-                    import pdb; pdb.set_trace()
+                    res = {}
+                    res["plddt"] = out["plddt"]
+                    res["mean_plddt"] = np.mean(out["plddt"])
+                    res["ptm"] = out["predicted_tm_score"]
+
                     output_dict_path = os.path.join(
                         output_directory, f'{output_name}_output_dict.pkl'
                     )
                     with open(output_dict_path, "wb") as fp:
-                        pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
+                        pickle.dump(res, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
                     logger.info(f"Model output written to {output_dict_path}...")
             break
