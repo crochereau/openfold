@@ -311,47 +311,19 @@ def main(args):
                 )
 
                 with open(unrelaxed_output_path, 'w') as fp:
-                    fp.write(protein.to_pdb(unrelaxed_protein))
-
-                with open(unrelaxed_output_path, 'w') as fp:
                     if args.cif_output:
                         fp.write(protein.to_modelcif(unrelaxed_protein))
-                    if args.pdb_output:
+                    else:
                         fp.write(protein.to_pdb(unrelaxed_protein))
 
                 logger.info(f"Output written to {unrelaxed_output_path}...")
 
                 if not args.skip_relaxation:
-                    amber_relaxer = relax.AmberRelaxation(
-                        use_gpu=(args.model_device != "cpu"),
-                        **config.relax,
-                    )
-
                     # Relax the prediction.
                     logger.info(f"Running relaxation on {unrelaxed_output_path}...")
-                    t = time.perf_counter()
-                    visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", default="")
-                    if "cuda" in args.model_device:
-                        device_no = args.model_device.split(":")[-1]
-                        os.environ["CUDA_VISIBLE_DEVICES"] = device_no
-                    relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
-                    os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
-                    relaxation_time = time.perf_counter() - t
-
-                    logger.info(f"Relaxation time: {relaxation_time}")
-                    update_timings({"relaxation": relaxation_time}, os.path.join(args.output_dir, "timings.json"))
-
-                    # Save the relaxed PDB.
-                    relaxed_output_path = os.path.join(
-                        output_directory, f'{output_name}_relaxed.pdb'
-                    )
-                    with open(relaxed_output_path, 'w') as fp:
-                        fp.write(relaxed_pdb_str)
-
-                    logger.info(f"Relaxed output written to {relaxed_output_path}...")
+                    relax_protein(config, args.model_device, unrelaxed_protein, output_directory, output_name, args.cif_output)
 
                 if args.save_outputs:
-                    import pdb; pdb.set_trace()
                     output_dict_path = os.path.join(
                         output_directory, f'{output_name}_output_dict.pkl'
                     )
@@ -463,10 +435,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--cif_output", action="store_true", default=True,
         help="Output predicted models in ModelCIF format instead of PDB format (default)"
-    )
-    parser.add_argument(
-        "--pdb_output", action="store_true", default=False,
-        help="Output predicted models in PDB format."
     )
     add_data_args(parser)
     args = parser.parse_args()
