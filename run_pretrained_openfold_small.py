@@ -51,7 +51,7 @@ torch.set_grad_enabled(False)
 
 from openfold.config import model_config
 from openfold.data import templates, feature_pipeline, data_pipeline
-from openfold.np import residue_constants, protein_new
+from openfold.np import residue_constants, protein
 import openfold.np.relax.relax as relax
 
 from openfold.utils.tensor_utils import (
@@ -301,7 +301,10 @@ def main(args):
                 )
 
                 with open(unrelaxed_output_path, 'w') as fp:
-                    fp.write(protein_new.to_pdb(unrelaxed_protein))
+                    if args.cif_output:
+                        fp.write(protein.to_modelcif(unrelaxed_protein))
+                    if args.pdb_output:
+                        fp.write(protein.to_pdb(unrelaxed_protein))
 
                 logger.info(f"Output written to {unrelaxed_output_path}...")
 
@@ -335,6 +338,7 @@ def main(args):
                     logger.info(f"Relaxed output written to {relaxed_output_path}...")
 
                 if args.save_outputs:
+                    import pdb; pdb.set_trace()
                     output_dict_path = os.path.join(
                         output_directory, f'{output_name}_output_dict.pkl'
                     )
@@ -342,7 +346,7 @@ def main(args):
                         pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
                     logger.info(f"Model output written to {output_dict_path}...")
-        break
+            break
             #except RuntimeError:
                 #continue
 
@@ -366,7 +370,7 @@ if __name__ == "__main__":
         help="Path to pair representation directory."
     )
     parser.add_argument(
-        "--output_dir", type=str, default=os.getcwd(),
+        "--output_dir", type=str, default="../function_pred/data/alphafold/structures",
         help="""Name of the directory in which to output the prediction""",
     )
     parser.add_argument(
@@ -437,6 +441,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--long_sequence_inference", action="store_true", default=False,
         help="""enable options to reduce memory usage at the cost of speed, helps longer sequences fit into GPU memory, see the README for details"""
+    )
+    parser.add_argument(
+        "--cif_output", action="store_true", default=True,
+        help="Output predicted models in ModelCIF format instead of PDB format (default)"
+    )
+    parser.add_argument(
+        "--pdb_output", action="store_true", default=False,
+        help="Output predicted models in PDB format."
     )
     add_data_args(parser)
     args = parser.parse_args()
