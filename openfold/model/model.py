@@ -52,7 +52,7 @@ from openfold.utils.tensor_utils import (
 )
 
 # TODO: turn back to False
-SAVE_ALL_ITERS = True
+SAVE_ALL_ITERS = False
 
 
 class AlphaFold(nn.Module):
