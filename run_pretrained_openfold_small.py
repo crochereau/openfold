@@ -76,9 +76,9 @@ def round_up_seqlen(seqlen):
 def generate_feature_dict_(
     tags,
     seqs,
-    args,
+    out_dir,
 ):
-    tmp_fasta_path = os.path.join(args.output_dir, f"tmp_{os.getpid()}.fasta")
+    tmp_fasta_path = os.path.join(out_dir, f"tmp_{os.getpid()}.fasta")
     assert len(seqs) == 1
     tag = tags[0]
     seq = seqs[0]
@@ -166,7 +166,13 @@ def list_files_with_extensions(dir, extensions):
 
 def main(args):
     # Create the output directory
-    os.makedirs(args.output_dir, exist_ok=True)
+    output_dir = Path(args.base_path) / Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fasta_dir = Path(args.base_path) / Path(args.fasta_dir)
+    feats_dir = Path(args.base_path) / Path(args.feats_dir)
+    single_dir = feats_dir / Path(args.single_dir)
+    pair_dir = feats_dir / Path(args.pair_dir)
+
 
     config = model_config(args.config_preset, long_sequence_inference=args.long_sequence_inference)
 
@@ -176,7 +182,6 @@ def main(args):
                 "Tracing requires that fixed_size mode be enabled in the config"
             )
 
-    output_dir_base = args.output_dir
     random_seed = args.data_random_seed
     if random_seed is None:
         random_seed = random.randrange(2**32)
@@ -185,18 +190,12 @@ def main(args):
     torch.manual_seed(random_seed + 1)
 
     feature_processor = feature_pipeline.FeaturePipeline(config.data)
-    if not os.path.exists(output_dir_base):
-        os.makedirs(output_dir_base)
-
-    feats_dir = Path(args.feats_dir)
-    single_dir = feats_dir / Path(args.single_dir)
-    pair_dir = feats_dir / Path(args.pair_dir)
 
     tag_list = []
     seq_list = []
-    for fasta_file in list_files_with_extensions(args.fasta_dir, (".fasta", ".fa")):
+    for fasta_file in list_files_with_extensions(fasta_dir, (".fasta", ".fa")):
         # Gather input sequences
-        with open(os.path.join(args.fasta_dir, fasta_file), "r") as fp:
+        with open(os.path.join(fasta_dir, fasta_file), "r") as fp:
             data = fp.read()
 
         tags, seqs = parse_fasta(data)
@@ -214,127 +213,135 @@ def main(args):
         args.model_device,
         args.openfold_checkpoint_path,
         args.jax_param_path,
-        args.output_dir,
+        output_dir,
         use_small_model=True
 )
 
     for model, output_directory in model_generator:
         cur_tracing_interval = 0
         for (tag, tags), seqs in tqdm.tqdm(sorted_targets):
-
-            single_rep_file = single_dir / Path(tag) / Path(f"{tag}_single_{args.iter}.pt")
-            pair_rep_file = pair_dir / Path(tag) / Path(f"{tag}_pair_{args.iter}.pt")
-
-            # [N, C_s]
-            si = torch.as_tensor(torch.load(single_rep_file))
-            # [N, C_z, C_z]
-            zij = torch.as_tensor(torch.load(pair_rep_file))
-
+    
             output_name = f'{tag}_{args.config_preset}'
             if args.output_postfix is not None:
                 output_name = f'{output_name}_{args.output_postfix}'
-
-            feature_dict = feature_dicts.get(tag, None)
-
-            if(feature_dict is None):
-                generate_feature_dict_
-                feature_dict = generate_feature_dict_(
-                    tags,
-                    seqs,
-                    args,
-                )
-
-                if(args.trace_model):
-                    n = feature_dict["aatype"].shape[-2]
-                    rounded_seqlen = round_up_seqlen(n)
-                    feature_dict = pad_feature_dict_seq(
-                        feature_dict, rounded_seqlen,
-                    )
-
-                feature_dicts[tag] = feature_dict
-
-            # feature dict with only seq_mask, aatype
-            num_iters = config.data.common.max_recycling_iters + 1
-            processed_feature_dict = process_features(feature_dict, num_iters)
-
-            # add saved reps to feature dict
-            processed_feature_dict['single'] = si
-            processed_feature_dict['pair'] = zij
-
-            # add batch dim
-            processed_feature_dict = {
-                k:torch.as_tensor(v, device=args.model_device)
-                for k,v in processed_feature_dict.items()
-            }
-
-            if(args.trace_model):
-                if(rounded_seqlen > cur_tracing_interval):
-                    logger.info(
-                        f"Tracing model at {rounded_seqlen} residues..."
-                    )
-                    t = time.perf_counter()
-                    trace_model_(model, processed_feature_dict)
-                    tracing_time = time.perf_counter() - t
-                    logger.info(
-                        f"Tracing time: {tracing_time}"
-                    )
-                    cur_tracing_interval = rounded_seqlen
-
-            out = run_model(model, processed_feature_dict, tag, args.output_dir)
-
-            processed_feature_dict = tensor_tree_map(lambda x: np.array(x.cpu()), processed_feature_dict)
-            out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
-
-            if args.save_structure:
-                unrelaxed_protein = prep_output(
-                    out,
-                    processed_feature_dict,
-                    feature_dict,
-                    feature_processor,
-                    args.config_preset,
-                    args.multimer_ri_gap,
-                    args.subtract_plddt
-                )
-
-                unrelaxed_output_path = os.path.join(
+    
+            unrelaxed_output_path = os.path.join(
                     output_directory, f'{output_name}_unrelaxed.pdb'
                 )
+            relaxed_output_path = unrelaxed_output_path.split('_unrelaxed')[0] + "_relaxed.pdb"
 
-                with open(unrelaxed_output_path, 'w') as fp:
-                    if args.cif_output:
-                        fp.write(protein.to_modelcif(unrelaxed_protein))
-                    else:
-                        fp.write(protein.to_pdb(unrelaxed_protein))
+            # if args.save_structure and (os.path.isfile(unrelaxed_output_path)) and (not os.path.isfile(relaxed_output_path)):
+            if args.save_structure and (not os.path.isfile(unrelaxed_output_path)):
+                single_rep_file = single_dir / Path(tag) / Path(f"{tag}_single_{args.iter}.pt")
+                pair_rep_file = pair_dir / Path(tag) / Path(f"{tag}_pair_{args.iter}.pt")
 
-                logger.info(f"Output written to {unrelaxed_output_path}...")
+                # [N, C_s]
+                si = torch.as_tensor(torch.load(single_rep_file))
+                # [N, C_z, C_z]
+                zij = torch.as_tensor(torch.load(pair_rep_file))
 
-                if not args.skip_relaxation:
-                    # Relax the prediction.
-                    logger.info(f"Running relaxation on {unrelaxed_output_path}...")
-                    relax_protein(config, args.model_device, unrelaxed_protein, output_directory, output_name, args.cif_output)
+                feature_dict = feature_dicts.get(tag, None)
 
-                if args.save_outputs:
-                    res = {}
-                    res["plddt"] = out["plddt"]
-                    res["mean_plddt"] = np.mean(out["plddt"])
-                    res["ptm"] = out["predicted_tm_score"]
-
-                    output_dict_path = os.path.join(
-                        output_directory, f'{output_name}_out.pkl'
+                if(feature_dict is None):
+                    generate_feature_dict_
+                    feature_dict = generate_feature_dict_(
+                        tags,
+                        seqs,
+                        output_dir,
                     )
-                    with open(output_dict_path, "wb") as fp:
-                        pickle.dump(res, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
-                    logger.info(f"Model output written to {output_dict_path}...")
+                    if(args.trace_model):
+                        n = feature_dict["aatype"].shape[-2]
+                        rounded_seqlen = round_up_seqlen(n)
+                        feature_dict = pad_feature_dict_seq(
+                            feature_dict, rounded_seqlen,
+                        )
 
-            #except RuntimeError:
-                #continue
+                    feature_dicts[tag] = feature_dict
+
+                # feature dict with only seq_mask, aatype
+                num_iters = config.data.common.max_recycling_iters + 1
+                processed_feature_dict = process_features(feature_dict, num_iters)
+
+                # add saved reps to feature dict
+                processed_feature_dict['single'] = si
+                processed_feature_dict['pair'] = zij
+
+                # add batch dim
+                processed_feature_dict = {
+                    k:torch.as_tensor(v, device=args.model_device)
+                    for k,v in processed_feature_dict.items()
+                }
+
+                if(args.trace_model):
+                    if(rounded_seqlen > cur_tracing_interval):
+                        logger.info(
+                            f"Tracing model at {rounded_seqlen} residues..."
+                        )
+                        t = time.perf_counter()
+                        trace_model_(model, processed_feature_dict)
+                        tracing_time = time.perf_counter() - t
+                        logger.info(
+                            f"Tracing time: {tracing_time}"
+                        )
+                        cur_tracing_interval = rounded_seqlen
+
+                out = run_model(model, processed_feature_dict, tag, output_dir)
+
+                processed_feature_dict = tensor_tree_map(lambda x: np.array(x.cpu()), processed_feature_dict)
+                out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
+
+                if args.save_structure:
+                    unrelaxed_protein = prep_output(
+                        out,
+                        processed_feature_dict,
+                        feature_dict,
+                        feature_processor,
+                        args.config_preset,
+                        args.multimer_ri_gap,
+                        args.subtract_plddt
+                    )
+
+                    with open(unrelaxed_output_path, 'w') as fp:
+                        if args.cif_output:
+                            fp.write(protein.to_modelcif(unrelaxed_protein))
+                        else:
+                            fp.write(protein.to_pdb(unrelaxed_protein))
+
+                    logger.info(f"Output written to {unrelaxed_output_path}...")
+
+                    if not args.skip_relaxation:
+                        # Relax the prediction.
+                        logger.info(f"Running relaxation on {unrelaxed_output_path}...")
+                        try:
+                            relax_protein(config, args.model_device, unrelaxed_protein, output_directory, output_name, args.cif_output)
+                        except ValueError:
+                            logger.info(f"Amber minimization cannot be performed on {unrelaxed_output_path}...")
+                            pass
+
+                    if args.save_outputs:
+                        res = {}
+                        res["plddt"] = out["plddt"]
+                        res["mean_plddt"] = np.mean(out["plddt"])
+                        res["ptm"] = out["predicted_tm_score"]
+
+                        output_dict_path = os.path.join(
+                            output_directory, f'{output_name}_out.pkl'
+                        )
+                        with open(output_dict_path, "wb") as fp:
+                            pickle.dump(res, fp, protocol=pickle.HIGHEST_PROTOCOL)
+
+                        logger.info(f"Model output written to {output_dict_path}...")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--fasta_dir", type=str, default="../function_pred/data/fastas/0_to_128",
+        "--base_path", type=str, default="../../../../../pmglocal/cr3007/openfold",
+        help="Path to main data directory."
+    )
+    parser.add_argument(
+        "--fasta_dir", type=str, default="../function_pred/data/fastas/512_to_1000_2",
         help="Path to directory of FASTA files, one sequence per file"
     )
     parser.add_argument(
@@ -382,7 +389,7 @@ if __name__ == "__main__":
         help="Whether to save all model outputs, including embeddings, etc."
     )
     parser.add_argument(
-        "--save_structure", action="store_true", default=False,
+        "--save_structure", action="store_true", default=True,
         help="Whether to save the output structure."
     )
     parser.add_argument(
@@ -431,8 +438,11 @@ if __name__ == "__main__":
 
     if(args.jax_param_path is None and args.openfold_checkpoint_path is None):
         args.jax_param_path = os.path.join(
+        args.base_path, 
+        os.path.join(
             "openfold", "resources", "params",
             "params_" + args.config_preset + ".npz"
+        )
         )
 
     if (args.model_device == "cpu" and torch.cuda.is_available()):
