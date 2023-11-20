@@ -58,6 +58,7 @@ from openfold.utils.trace_utils import (
     pad_feature_dict_seq,
     trace_model_,
 )
+from scripts.precompute_embeddings import EmbeddingGenerator
 from scripts.utils import add_data_args
 
 
@@ -76,17 +77,29 @@ def precompute_alignments(tags, seqs, alignment_dir, args):
 
             os.makedirs(local_alignment_dir)
 
-            alignment_runner = data_pipeline.AlignmentRunner(
-                jackhmmer_binary_path=args.jackhmmer_binary_path,
-                hhblits_binary_path=args.hhblits_binary_path,
-                hhsearch_binary_path=args.hhsearch_binary_path,
-                uniref90_database_path=args.uniref90_database_path,
-                mgnify_database_path=args.mgnify_database_path,
-                bfd_database_path=args.bfd_database_path,
-                uniclust30_database_path=args.uniclust30_database_path,
-                pdb70_database_path=args.pdb70_database_path,
-                no_cpus=args.cpus,
-            )
+            # In seqemb mode, use AlignmentRunner only to generate templates
+            if args.use_single_seq_mode:
+                alignment_runner = data_pipeline.AlignmentRunner(
+                    jackhmmer_binary_path=args.jackhmmer_binary_path,
+                    hhsearch_binary_path=args.hhsearch_binary_path,
+                    uniref90_database_path=args.uniref90_database_path,
+                    pdb70_database_path=args.pdb70_database_path,
+                    no_cpus=args.cpus,
+                )
+                embedding_generator = EmbeddingGenerator()
+                embedding_generator.run(tmp_fasta_path, alignment_dir)
+            else:
+                alignment_runner = data_pipeline.AlignmentRunner(
+                    jackhmmer_binary_path=args.jackhmmer_binary_path,
+                    hhblits_binary_path=args.hhblits_binary_path,
+                    hhsearch_binary_path=args.hhsearch_binary_path,
+                    uniref90_database_path=args.uniref90_database_path,
+                    mgnify_database_path=args.mgnify_database_path,
+                    bfd_database_path=args.bfd_database_path,
+                    uniclust30_database_path=args.uniclust30_database_path,
+                    pdb70_database_path=args.pdb70_database_path,
+                    no_cpus=args.cpus,
+                )
             alignment_runner.run(
                 tmp_fasta_path, local_alignment_dir
             )
@@ -119,7 +132,9 @@ def generate_feature_dict(
 
         local_alignment_dir = os.path.join(alignment_dir, tag)
         feature_dict = data_processor.process_fasta(
-            fasta_path=tmp_fasta_path, alignment_dir=local_alignment_dir
+            fasta_path=tmp_fasta_path,
+            alignment_dir=local_alignment_dir,
+            seqemb_mode=args.use_single_seq_mode,
         )
     else:
         with open(tmp_fasta_path, "w") as fp:
@@ -143,6 +158,8 @@ def main(args):
     # Create the output directory
     os.makedirs(args.output_dir, exist_ok=True)
 
+    if args.config_preset.startswith("seq"):
+        args.use_single_seq_mode = True
     config = model_config(args.config_preset, long_sequence_inference=args.long_sequence_inference)
 
     if(args.trace_model):
@@ -352,6 +369,10 @@ if __name__ == "__main__":
                 is skipped and database path arguments are ignored."""
     )
     parser.add_argument(
+        "--use_single_seq_mode", action="store_true", default=False,
+        help="""Use single sequence embeddings instead of MSAs."""
+    )
+    parser.add_argument(
         "--output_dir", type=str, default=os.getcwd(),
         help="""Name of the directory in which to output the prediction""",
     )
@@ -408,7 +429,7 @@ if __name__ == "__main__":
         help="""Postfix for output prediction filenames"""
     )
     parser.add_argument(
-        "--data_random_seed", type=str, default=None
+        "--data_random_seed", type=int, default=None
     )
     parser.add_argument(
         "--skip_relaxation", action="store_true", default=False,

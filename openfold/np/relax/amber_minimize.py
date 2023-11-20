@@ -28,18 +28,10 @@ import openfold.utils.loss as loss
 from openfold.np.relax import cleanup, utils
 import ml_collections
 import numpy as np
-try:
-    # openmm >= 7.6
-    import openmm
-    from openmm import unit
-    from openmm import app as openmm_app
-    from openmm.app.internal.pdbstructure import PdbStructure
-except ImportError:
-    # openmm < 7.6 (requires DeepMind patch)
-    from simtk import openmm
-    from simtk import unit
-    from simtk.openmm import app as openmm_app
-    from simtk.openmm.app.internal.pdbstructure import PdbStructure
+import openmm
+from openmm import unit
+from openmm import app as openmm_app
+from openmm.app.internal.pdbstructure import PdbStructure
 
 ENERGY = unit.kilocalories_per_mole
 LENGTH = unit.angstroms
@@ -523,9 +515,6 @@ def run_pipeline(
     # perform this check before `clean_protein`.
     _check_residues_are_well_defined(prot)
     pdb_string = clean_protein(prot, checks=checks)
-
-    # We keep the input around to restore metadata deleted by the relaxer
-    input_prot = prot
 
     exclude_residues = exclude_residues or []
     exclude_residues = set(exclude_residues)

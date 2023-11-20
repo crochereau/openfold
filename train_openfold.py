@@ -89,8 +89,8 @@ class OpenFoldWrapper(pl.LightningModule):
 
         for k,v in other_metrics.items():
             self.log(
-                f"{phase}/{k}", 
-                v, 
+                f"{phase}/{k}",
+                torch.mean(v),
                 on_step=False, on_epoch=True, logger=True
             )
 
@@ -415,6 +415,10 @@ if __name__ == "__main__":
         "max_template_date", type=str,
         help='''Cutoff for all templates. In training mode, templates are also 
                 filtered by the release date of the target'''
+    )
+    parser.add_argument(
+        "--use_single_seq_mode", type=str, default=False,
+        help="Use single sequence embeddings instead of MSAs."
     )
     parser.add_argument(
         "--distillation_data_dir", type=str, default=None,
